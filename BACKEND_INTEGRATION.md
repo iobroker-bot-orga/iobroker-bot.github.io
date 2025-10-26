@@ -29,7 +29,7 @@ Body: {
 
 #### Option 2: GitHub App
 
-Create a GitHub App with `workflow_dispatch` permissions that:
+Create a GitHub App with `actions:write` permissions that:
 
 1. Handles OAuth authentication
 2. Triggers workflows on behalf of the authenticated user
