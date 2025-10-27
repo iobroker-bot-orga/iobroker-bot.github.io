@@ -1,0 +1,104 @@
+name: Trigger Copy Issues
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target repository (owner/repo format)'
+        required: true
+        type: string
+      source:
+        description: 'Source repository or issue (owner/repo format or full issue URL)'
+        required: true
+        type: string
+      force:
+        description: 'Force copy even if issue already exists'
+        required: false
+        type: boolean
+        default: false
+      include-closed:
+        description: 'Include closed issues'
+        required: false
+        type: boolean
+        default: false
+
+  repository_dispatch:
+    types: [trigger-copy-issues]
+
+jobs:
+  trigger-copy-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate repository inputs
+        id: validate
+        run: |
+          TARGET="${{ github.event.inputs.target || github.event.client_payload.target }}"
+          SOURCE="${{ github.event.inputs.source || github.event.client_payload.source }}"
+          
+          echo "Target: $TARGET"
+          echo "Source: $SOURCE"
+          
+          # Function to validate ioBroker adapter repository
+          validate_iobroker_repo() {
+            local repo=$1
+            # Extract repository name from owner/repo format or URL
+            local repo_name=$(echo "$repo" | sed -E 's/.*\/([^\/]+)(\/.*)?$/\1/' | sed 's/\.git$//')
+            
+            if [[ ! "$repo_name" =~ ^ioBroker\. ]]; then
+              echo "Error: Repository '$repo_name' is not an ioBroker adapter repository (must start with 'ioBroker.')"
+              return 1
+            fi
+            
+            # Validate format (owner/repo)
+            if [[ ! "$repo" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$ ]]; then
+              # Check if it's a full issue URL (which is allowed for source)
+              if [[ "$repo" =~ ^https?://github\.com/[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+/issues/[0-9]+$ ]]; then
+                return 0
+              fi
+              echo "Error: Invalid repository format. Expected: owner/repo"
+              return 1
+            fi
+            
+            return 0
+          }
+          
+          # Validate target repository
+          if ! validate_iobroker_repo "$TARGET"; then
+            exit 1
+          fi
+          
+          # Validate source repository or issue URL
+          if ! validate_iobroker_repo "$SOURCE"; then
+            exit 1
+          fi
+          
+          echo "target=$TARGET" >> $GITHUB_OUTPUT
+          echo "source=$SOURCE" >> $GITHUB_OUTPUT
+
+      - name: Trigger copy-issues workflow
+        run: |
+          TARGET="${{ steps.validate.outputs.target }}"
+          SOURCE="${{ steps.validate.outputs.source }}"
+          FORCE="${{ github.event.inputs.force || github.event.client_payload.force || 'false' }}"
+          INCLUDE_CLOSED="${{ github.event.inputs.include-closed || github.event.client_payload.include-closed || 'false' }}"
+          
+          echo "Triggering copy-issues workflow"
+          echo "Target: $TARGET"
+          echo "Source: $SOURCE"
+          echo "Force: $FORCE"
+          echo "Include closed: $INCLUDE_CLOSED"
+          
+          # Trigger the workflow in tools repository
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.WORKFLOW_TRIGGER_TOKEN }}" \
+            https://api.github.com/repos/iobroker-bot-orga/tools/actions/workflows/copy-issues.yml/dispatches \
+            -d "{\"ref\":\"main\",\"inputs\":{\"target\":\"$TARGET\",\"source\":\"$SOURCE\",\"force\":\"$FORCE\",\"include-closed\":\"$INCLUDE_CLOSED\"}}"
+          
+          echo "Workflow trigger request sent successfully"
+          
+          # Extract owner and repo from target for the link
+          TARGET_OWNER=$(echo "$TARGET" | cut -d'/' -f1)
+          TARGET_REPO=$(echo "$TARGET" | cut -d'/' -f2)
+          
+          echo "::notice title=Copy Issues Triggered::Workflow triggered successfully. Check the target repository issues at: https://github.com/$TARGET_OWNER/$TARGET_REPO/issues"

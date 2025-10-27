@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ioBroker Bot - Copy Issues">
+    <title>Copy Issues - ioBroker Bot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 60px 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 700px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .description {
+            color: #666;
+            font-size: 1.1em;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 1em;
+            transition: border-color 0.2s;
+            font-family: inherit;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        input[type="text"].invalid {
+            border-color: #e74c3c;
+        }
+
+        input[type="text"].valid {
+            border-color: #27ae60;
+        }
+
+        .help-text {
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .error-text {
+            color: #e74c3c;
+            font-size: 0.9em;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .checkbox-label {
+            display: inline;
+            cursor: pointer;
+            margin-bottom: 0;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            text-align: center;
+            width: 100%;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .status-message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+            text-align: center;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .result-link {
+            display: none;
+            padding: 12px 16px;
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 6px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .result-link a {
+            color: #0066cc;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .result-link a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            .container {
+                padding: 40px 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">📋</div>
+        <h1>Copy Issues</h1>
+        <p class="description">
+            This tool copies issues from one ioBroker adapter repository to another. 
+            You can copy a single issue or all issues from a source repository.
+        </p>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <form id="copyForm">
+            <div class="form-group">
+                <label for="target">Target Repository</label>
+                <input 
+                    type="text" 
+                    id="target" 
+                    name="target" 
+                    placeholder="e.g., iobroker-community-adapters/ioBroker.template"
+                    required
+                >
+                <div class="help-text">Enter "owner/repository" format (must be an ioBroker adapter: ioBroker.*)</div>
+                <div class="error-text" id="targetError">Repository must be an ioBroker adapter (starting with "ioBroker.")</div>
+            </div>
+
+            <div class="form-group">
+                <label for="source">Source Repository or Issue</label>
+                <input 
+                    type="text" 
+                    id="source" 
+                    name="source" 
+                    placeholder="e.g., owner/ioBroker.repo or https://github.com/owner/ioBroker.repo/issues/123"
+                    required
+                >
+                <div class="help-text">Enter "owner/repository" format or a full issue URL</div>
+                <div class="error-text" id="sourceError">Repository must be an ioBroker adapter (starting with "ioBroker.")</div>
+            </div>
+
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input 
+                        type="checkbox" 
+                        id="force" 
+                        name="force"
+                    >
+                    <label for="force" class="checkbox-label">
+                        Force copy even if issue already exists
+                    </label>
+                </div>
+
+                <div class="checkbox-group">
+                    <input 
+                        type="checkbox" 
+                        id="include-closed" 
+                        name="include-closed"
+                    >
+                    <label for="include-closed" class="checkbox-label">
+                        Include closed issues
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" id="executeBtn" disabled>Execute</button>
+        </form>
+
+        <div id="resultLink" class="result-link"></div>
+
+        <a href="index.html" class="back-link">← Back to Tools</a>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        const targetInput = document.getElementById('target');
+        const sourceInput = document.getElementById('source');
+        const forceCheckbox = document.getElementById('force');
+        const includeClosedCheckbox = document.getElementById('include-closed');
+        const executeBtn = document.getElementById('executeBtn');
+        const copyForm = document.getElementById('copyForm');
+        const statusMessage = document.getElementById('statusMessage');
+        const targetError = document.getElementById('targetError');
+        const sourceError = document.getElementById('sourceError');
+        const resultLink = document.getElementById('resultLink');
+
+        // Regular expressions for validation
+        const ownerRepoPattern = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/;
+        const issueUrlPattern = /^https?:\/\/(www\.)?github\.com\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\/issues\/\d+$/;
+
+        function extractRepoName(value) {
+            value = value.trim();
+            
+            // If it's an issue URL, extract the repo name
+            const issueMatch = value.match(/github\.com\/[^\/]+\/([^\/]+)\/issues/);
+            if (issueMatch) {
+                return issueMatch[1];
+            }
+            
+            // If it's owner/repo format, extract the repo name
+            const ownerRepoMatch = value.match(/\/([^\/]+)$/);
+            if (ownerRepoMatch) {
+                return ownerRepoMatch[1];
+            }
+            
+            return null;
+        }
+
+        function validateIoBrokerRepo(value) {
+            if (!value || value.trim() === '') {
+                return false;
+            }
+
+            value = value.trim();
+
+            // Check if it matches owner/repo format
+            if (ownerRepoPattern.test(value)) {
+                const repoName = extractRepoName(value);
+                return repoName && repoName.startsWith('ioBroker.');
+            }
+
+            // Check if it matches GitHub issue URL format
+            if (issueUrlPattern.test(value)) {
+                const repoName = extractRepoName(value);
+                return repoName && repoName.startsWith('ioBroker.');
+            }
+
+            return false;
+        }
+
+        function updateButtonState() {
+            const targetValid = validateIoBrokerRepo(targetInput.value);
+            const sourceValid = validateIoBrokerRepo(sourceInput.value);
+            
+            executeBtn.disabled = !(targetValid && sourceValid);
+
+            // Update target input styling
+            if (targetInput.value.trim() !== '') {
+                if (targetValid) {
+                    targetInput.classList.remove('invalid');
+                    targetInput.classList.add('valid');
+                    targetError.style.display = 'none';
+                } else {
+                    targetInput.classList.remove('valid');
+                    targetInput.classList.add('invalid');
+                    targetError.style.display = 'block';
+                }
+            } else {
+                targetInput.classList.remove('valid', 'invalid');
+                targetError.style.display = 'none';
+            }
+
+            // Update source input styling
+            if (sourceInput.value.trim() !== '') {
+                if (sourceValid) {
+                    sourceInput.classList.remove('invalid');
+                    sourceInput.classList.add('valid');
+                    sourceError.style.display = 'none';
+                } else {
+                    sourceInput.classList.remove('valid');
+                    sourceInput.classList.add('invalid');
+                    sourceError.style.display = 'block';
+                }
+            } else {
+                sourceInput.classList.remove('valid', 'invalid');
+                sourceError.style.display = 'none';
+            }
+        }
+
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type}`;
+            statusMessage.style.display = 'block';
+        }
+
+        function hideStatus() {
+            statusMessage.style.display = 'none';
+        }
+
+        function showResultLink(targetRepo) {
+            const [owner, repo] = targetRepo.split('/');
+            const issuesUrl = `https://github.com/${owner}/${repo}/issues`;
+            resultLink.innerHTML = `<a href="${issuesUrl}" target="_blank" rel="noopener noreferrer">View issues in ${targetRepo} →</a>`;
+            resultLink.style.display = 'block';
+        }
+
+        function hideResultLink() {
+            resultLink.style.display = 'none';
+        }
+
+        targetInput.addEventListener('input', updateButtonState);
+        targetInput.addEventListener('blur', updateButtonState);
+        sourceInput.addEventListener('input', updateButtonState);
+        sourceInput.addEventListener('blur', updateButtonState);
+
+        copyForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const targetValue = targetInput.value.trim();
+            const sourceValue = sourceInput.value.trim();
+            
+            if (!validateIoBrokerRepo(targetValue) || !validateIoBrokerRepo(sourceValue)) {
+                showStatus('Please enter valid ioBroker adapter repositories', 'error');
+                return;
+            }
+
+            const force = forceCheckbox.checked;
+            const includeClosed = includeClosedCheckbox.checked;
+
+            // Disable form during submission
+            executeBtn.disabled = true;
+            targetInput.disabled = true;
+            sourceInput.disabled = true;
+            forceCheckbox.disabled = true;
+            includeClosedCheckbox.disabled = true;
+            hideResultLink();
+
+            showStatus('Triggering copy-issues workflow...', 'info');
+
+            try {
+                // Check if GitHub token is configured
+                const config = window.COPY_ISSUES_CONFIG;
+                if (!config || !config.GITHUB_TOKEN || config.GITHUB_TOKEN === '') {
+                    showStatus(
+                        'Configuration incomplete: GitHub token not set. Please contact the repository administrator to configure the GITHUB_TOKEN in config.js',
+                        'error'
+                    );
+                    targetInput.disabled = false;
+                    sourceInput.disabled = false;
+                    forceCheckbox.disabled = false;
+                    includeClosedCheckbox.disabled = false;
+                    updateButtonState();
+                    return;
+                }
+
+                // Trigger the workflow in this repository
+                const response = await fetch(
+                    `https://api.github.com/repos/${config.OWNER}/${config.REPO}/actions/workflows/${config.WORKFLOW_ID}/dispatches`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/vnd.github.v3+json',
+                            'Authorization': `token github_pat_${config.GITHUB_TOKEN}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            ref: 'main',
+                            inputs: {
+                                target: targetValue,
+                                source: sourceValue,
+                                force: force.toString(),
+                                'include-closed': includeClosed.toString()
+                            }
+                        })
+                    }
+                );
+
+                if (response.status === 204 || response.status === 200) {
+                    showStatus(
+                        `Copy-issues workflow triggered successfully! ` +
+                        `The workflow is now running. Issues will be copied from ${sourceValue} to ${targetValue}.`,
+                        'success'
+                    );
+                    
+                    showResultLink(targetValue);
+                    
+                    // Clear form after success
+                    setTimeout(() => {
+                        targetInput.value = '';
+                        sourceInput.value = '';
+                        forceCheckbox.checked = false;
+                        includeClosedCheckbox.checked = false;
+                        hideStatus();
+                        targetInput.disabled = false;
+                        sourceInput.disabled = false;
+                        forceCheckbox.disabled = false;
+                        includeClosedCheckbox.disabled = false;
+                        updateButtonState();
+                    }, 10000);
+                } else if (response.status === 401) {
+                    showStatus('Authentication failed: Invalid or expired GitHub token. Please contact the administrator.', 'error');
+                    targetInput.disabled = false;
+                    sourceInput.disabled = false;
+                    forceCheckbox.disabled = false;
+                    includeClosedCheckbox.disabled = false;
+                    updateButtonState();
+                } else if (response.status === 404) {
+                    showStatus('Workflow not found. Please ensure the workflow file exists in the repository.', 'error');
+                    targetInput.disabled = false;
+                    sourceInput.disabled = false;
+                    forceCheckbox.disabled = false;
+                    includeClosedCheckbox.disabled = false;
+                    updateButtonState();
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    showStatus(
+                        `Failed to trigger workflow: ${errorData.message || response.statusText || 'Unknown error'}`,
+                        'error'
+                    );
+                    targetInput.disabled = false;
+                    sourceInput.disabled = false;
+                    forceCheckbox.disabled = false;
+                    includeClosedCheckbox.disabled = false;
+                    updateButtonState();
+                }
+
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                targetInput.disabled = false;
+                sourceInput.disabled = false;
+                forceCheckbox.disabled = false;
+                includeClosedCheckbox.disabled = false;
+                updateButtonState();
+            }
+        });
+    </script>
+</body>
+</html>

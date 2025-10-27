@@ -19,7 +19,16 @@ const CONFIG = {
     WORKFLOW_ID: 'trigger-repository-check.yml'
 };
 
+// Configuration for Copy Issues tool
+const COPY_ISSUES_CONFIG = {
+    GITHUB_TOKEN: '11BFLRKSA0jz4Wf6gbS1Gq_0T65v3db2aT2lM8NWCJLbxeSK5XckUPyhiZbXPIJKphPPMWSM5OmF0tkqx8', // Same token as above
+    OWNER: 'iobroker-bot-orga',
+    REPO: 'iobroker-bot.github.io',
+    WORKFLOW_ID: 'trigger-copy-issues.yml'
+};
+
 // Export for use in check-repository.html
 if (typeof window !== 'undefined') {
     window.REPO_CHECKER_CONFIG = CONFIG;
+    window.COPY_ISSUES_CONFIG = COPY_ISSUES_CONFIG;
 }
