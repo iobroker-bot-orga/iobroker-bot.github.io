@@ -16,7 +16,12 @@ const CONFIG = {
     // Repository information
     OWNER: 'iobroker-bot-orga',
     REPO: 'iobroker-bot.github.io',
-    WORKFLOW_ID: 'trigger-repository-check.yml'
+    WORKFLOW_ID: 'trigger-repository-check.yml',
+    
+    // Check-tasks repository information
+    CHECK_TASKS_OWNER: 'iobroker-bot-orga',
+    CHECK_TASKS_REPO: 'check-tasks',
+    CHECK_TASKS_WORKFLOW_ID: 'checkRepository.yml'
 };
 
 // Export for use in check-repository.html

@@ -42,14 +42,20 @@ jobs:
           echo "Triggering repository check for: $REPO"
           echo "Recreate: $RECREATE"
           
+          # Add --recreate flag to repository parameter if recreate is true
+          if [ "$RECREATE" = "true" ]; then
+            REPO_PARAM="$REPO --recreate"
+          else
+            REPO_PARAM="$REPO"
+          fi
+          
+          echo "Repository parameter: $REPO_PARAM"
+          
           # Trigger the workflow in check-tasks repository
           curl -X POST \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.WORKFLOW_TRIGGER_TOKEN }}" \
             https://api.github.com/repos/iobroker-bot-orga/check-tasks/actions/workflows/checkRepository.yml/dispatches \
-            -d "{\"ref\":\"main\",\"inputs\":{\"repository\":\"$REPO\"}}"
-          
-          # Note: The recreate flag would need to be added to the target workflow's inputs
-          # For now, it's documented but not implemented in the target workflow
+            -d "{\"ref\":\"main\",\"inputs\":{\"repository\":\"$REPO_PARAM\"}}"
           
           echo "Workflow trigger request sent successfully"

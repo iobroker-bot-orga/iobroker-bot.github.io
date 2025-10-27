@@ -183,6 +183,64 @@
             border: 1px solid #bee5eb;
         }
 
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-step {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            background: #f8f9fa;
+            text-align: left;
+        }
+
+        .progress-step.pending {
+            opacity: 0.6;
+        }
+
+        .progress-step.running {
+            background: #fff3cd;
+            border-color: #ffc107;
+        }
+
+        .progress-step.success {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+
+        .progress-step.error {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+
+        .progress-step-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .progress-step-status {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .issue-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 10px 16px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .issue-link:hover {
+            background: #5568d3;
+        }
+
         @media (max-width: 600px) {
             h1 {
                 font-size: 2em;
@@ -204,6 +262,25 @@
         </p>
 
         <div id="statusMessage" class="status-message"></div>
+
+        <div id="progressContainer" class="progress-container">
+            <div id="step1" class="progress-step pending">
+                <div class="progress-step-title">1. Validating repository</div>
+                <div class="progress-step-status">Pending...</div>
+            </div>
+            <div id="step2" class="progress-step pending">
+                <div class="progress-step-title">2. Triggering workflow</div>
+                <div class="progress-step-status">Pending...</div>
+            </div>
+            <div id="step3" class="progress-step pending">
+                <div class="progress-step-title">3. Waiting for intermediate workflow</div>
+                <div class="progress-step-status">Pending...</div>
+            </div>
+            <div id="step4" class="progress-step pending">
+                <div class="progress-step-title">4. Waiting for repository check</div>
+                <div class="progress-step-status">Pending...</div>
+            </div>
+        </div>
 
         <form id="checkForm">
             <div class="form-group">
@@ -246,10 +323,37 @@
         const checkForm = document.getElementById('checkForm');
         const statusMessage = document.getElementById('statusMessage');
         const repositoryError = document.getElementById('repositoryError');
+        const progressContainer = document.getElementById('progressContainer');
 
         // Regular expressions for validation
         const ownerRepoPattern = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/;
         const githubUrlPattern = /^https?:\/\/(www\.)?github\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_.-]+)(\.git)?$/;
+
+        // Utility function to format GitHub token with proper prefix
+        function formatGitHubToken(token) {
+            if (!token) return null;
+            // Only add prefix if the token doesn't already have a recognized GitHub token prefix
+            const hasPrefix = token.startsWith('github_pat_') || 
+                            token.startsWith('ghp_') || 
+                            token.startsWith('gho_') || 
+                            token.startsWith('ghu_') || 
+                            token.startsWith('ghs_') || 
+                            token.startsWith('ghr_');
+            return hasPrefix ? token : `github_pat_${token}`;
+        }
+
+        // Utility function to build GitHub API headers
+        function buildGitHubHeaders(token) {
+            const headers = {
+                'Accept': 'application/vnd.github.v3+json'
+            };
+            
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            return headers;
+        }
 
         function validateRepository(value) {
             if (!value || value.trim() === '') {
@@ -318,6 +422,127 @@
             statusMessage.style.display = 'none';
         }
 
+        function updateProgressStep(stepId, status, statusText) {
+            const step = document.getElementById(stepId);
+            step.className = `progress-step ${status}`;
+            step.querySelector('.progress-step-status').textContent = statusText;
+        }
+
+        function showProgress() {
+            progressContainer.style.display = 'block';
+        }
+
+        function hideProgress() {
+            progressContainer.style.display = 'none';
+            // Reset all steps
+            ['step1', 'step2', 'step3', 'step4'].forEach(id => {
+                updateProgressStep(id, 'pending', 'Pending...');
+            });
+        }
+
+        async function verifyRepositoryExists(ownerRepo, token) {
+            try {
+                const [owner, repo] = ownerRepo.split('/');
+                const response = await fetch(
+                    `https://api.github.com/repos/${owner}/${repo}`,
+                    { headers: buildGitHubHeaders(token) }
+                );
+
+                if (response.status === 200) {
+                    return { exists: true, data: await response.json() };
+                } else if (response.status === 404) {
+                    return { exists: false, error: 'Repository not found' };
+                } else {
+                    return { exists: false, error: `HTTP ${response.status}: ${response.statusText}` };
+                }
+            } catch (error) {
+                return { exists: false, error: error.message };
+            }
+        }
+
+        async function waitForWorkflowRun(owner, repo, workflowId, token, startTime, timeout = 120000) {
+            const endTime = Date.now() + timeout;
+            
+            while (Date.now() < endTime) {
+                try {
+                    const response = await fetch(
+                        `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/runs?per_page=5`,
+                        { headers: buildGitHubHeaders(token) }
+                    );
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        // Find the most recent run that started after our trigger
+                        const run = data.workflow_runs.find(r => new Date(r.created_at) >= startTime);
+                        
+                        if (run) {
+                            return { success: true, run };
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching workflow run:', error);
+                }
+
+                // Wait 2 seconds before next check
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            return { success: false, error: 'Timeout waiting for workflow to start' };
+        }
+
+        async function monitorWorkflowRun(owner, repo, runId, token, timeout = 300000) {
+            const endTime = Date.now() + timeout;
+            
+            while (Date.now() < endTime) {
+                try {
+                    const response = await fetch(
+                        `https://api.github.com/repos/${owner}/${repo}/actions/runs/${runId}`,
+                        { headers: buildGitHubHeaders(token) }
+                    );
+
+                    if (response.ok) {
+                        const run = await response.json();
+                        
+                        if (run.status === 'completed') {
+                            return {
+                                success: true,
+                                conclusion: run.conclusion,
+                                run
+                            };
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error monitoring workflow run:', error);
+                }
+
+                // Wait 3 seconds before next check
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+
+            return { success: false, error: 'Timeout waiting for workflow to complete' };
+        }
+
+        async function findCheckIssue(targetRepo, token) {
+            try {
+                const [owner, repo] = targetRepo.split('/');
+                const response = await fetch(
+                    `https://api.github.com/repos/${owner}/${repo}/issues?labels=check&state=all&per_page=1`,
+                    { headers: buildGitHubHeaders(token) }
+                );
+
+                if (response.ok) {
+                    const issues = await response.json();
+                    if (issues.length > 0) {
+                        return { success: true, issue: issues[0] };
+                    }
+                }
+            } catch (error) {
+                console.error('Error finding check issue:', error);
+            }
+
+            return { success: false };
+        }
+
         repositoryInput.addEventListener('input', updateButtonState);
         repositoryInput.addEventListener('blur', updateButtonState);
 
@@ -338,7 +563,8 @@
             repositoryInput.disabled = true;
             recreateCheckbox.disabled = true;
 
-            showStatus('Triggering repository check...', 'info');
+            hideStatus();
+            showProgress();
 
             try {
                 // Check if GitHub token is configured
@@ -348,20 +574,41 @@
                         'Configuration incomplete: GitHub token not set. Please contact the repository administrator to configure the GITHUB_TOKEN in config.js',
                         'error'
                     );
+                    hideProgress();
                     repositoryInput.disabled = false;
                     recreateCheckbox.disabled = false;
                     updateButtonState();
                     return;
                 }
 
-                // Trigger the workflow in this repository
+                const token = formatGitHubToken(config.GITHUB_TOKEN);
+
+                // Step 1: Verify repository exists
+                updateProgressStep('step1', 'running', 'Checking if repository exists...');
+                const repoCheck = await verifyRepositoryExists(ownerRepo, token);
+                
+                if (!repoCheck.exists) {
+                    updateProgressStep('step1', 'error', `Failed: ${repoCheck.error}`);
+                    showStatus(`Repository verification failed: ${repoCheck.error}`, 'error');
+                    repositoryInput.disabled = false;
+                    recreateCheckbox.disabled = false;
+                    updateButtonState();
+                    return;
+                }
+
+                updateProgressStep('step1', 'success', `Repository verified: ${repoCheck.data.full_name}`);
+
+                // Step 2: Trigger the workflow
+                updateProgressStep('step2', 'running', 'Triggering workflow...');
+                const startTime = new Date();
+                
                 const response = await fetch(
                     `https://api.github.com/repos/${config.OWNER}/${config.REPO}/actions/workflows/${config.WORKFLOW_ID}/dispatches`,
                     {
                         method: 'POST',
                         headers: {
                             'Accept': 'application/vnd.github.v3+json',
-                            'Authorization': `token github_pat_${config.GITHUB_TOKEN}`,
+                            'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
@@ -374,45 +621,152 @@
                     }
                 );
 
-                if (response.status === 204 || response.status === 200) {
+                if (response.status !== 204 && response.status !== 200) {
+                    updateProgressStep('step2', 'error', `Failed: HTTP ${response.status}`);
+                    
+                    if (response.status === 401) {
+                        showStatus('Authentication failed: Invalid or expired GitHub token.', 'error');
+                    } else if (response.status === 404) {
+                        showStatus('Workflow not found.', 'error');
+                    } else {
+                        const errorData = await response.json().catch(() => ({}));
+                        showStatus(`Failed to trigger workflow: ${errorData.message || response.statusText}`, 'error');
+                    }
+                    
+                    repositoryInput.disabled = false;
+                    recreateCheckbox.disabled = false;
+                    updateButtonState();
+                    return;
+                }
+
+                updateProgressStep('step2', 'success', 'Workflow triggered successfully');
+
+                // Step 3: Wait for and monitor intermediate workflow
+                updateProgressStep('step3', 'running', 'Waiting for intermediate workflow to start...');
+                
+                const waitResult = await waitForWorkflowRun(
+                    config.OWNER,
+                    config.REPO,
+                    config.WORKFLOW_ID,
+                    token,
+                    startTime
+                );
+
+                if (!waitResult.success) {
+                    updateProgressStep('step3', 'error', waitResult.error);
+                    showStatus('Failed to find workflow run. Check the Actions tab manually.', 'error');
+                    repositoryInput.disabled = false;
+                    recreateCheckbox.disabled = false;
+                    updateButtonState();
+                    return;
+                }
+
+                const intermediateRun = waitResult.run;
+                updateProgressStep('step3', 'running', `Monitoring workflow run #${intermediateRun.run_number}...`);
+
+                const monitorResult = await monitorWorkflowRun(
+                    config.OWNER,
+                    config.REPO,
+                    intermediateRun.id,
+                    token
+                );
+
+                if (!monitorResult.success) {
+                    updateProgressStep('step3', 'error', monitorResult.error);
+                    showStatus('Workflow monitoring timed out. Check the Actions tab manually.', 'error');
+                    repositoryInput.disabled = false;
+                    recreateCheckbox.disabled = false;
+                    updateButtonState();
+                    return;
+                }
+
+                if (monitorResult.conclusion === 'success') {
+                    updateProgressStep('step3', 'success', 'Intermediate workflow completed successfully');
+                } else {
+                    updateProgressStep('step3', 'error', `Workflow failed with conclusion: ${monitorResult.conclusion}`);
+                    showStatus(`Intermediate workflow failed: ${monitorResult.conclusion}`, 'error');
+                    repositoryInput.disabled = false;
+                    recreateCheckbox.disabled = false;
+                    updateButtonState();
+                    return;
+                }
+
+                // Step 4: Monitor target workflow in check-tasks
+                updateProgressStep('step4', 'running', 'Waiting for repository check workflow...');
+                
+                const targetWaitResult = await waitForWorkflowRun(
+                    config.CHECK_TASKS_OWNER,
+                    config.CHECK_TASKS_REPO,
+                    config.CHECK_TASKS_WORKFLOW_ID,
+                    token,
+                    startTime,
+                    180000 // 3 minutes timeout
+                );
+
+                if (!targetWaitResult.success) {
+                    updateProgressStep('step4', 'running', 'Workflow may still be running. Checking for issue...');
+                    // Continue to check for issue even if we can't find the workflow
+                } else {
+                    updateProgressStep('step4', 'running', `Monitoring check workflow run #${targetWaitResult.run.run_number}...`);
+
+                    const targetMonitorResult = await monitorWorkflowRun(
+                        config.CHECK_TASKS_OWNER,
+                        config.CHECK_TASKS_REPO,
+                        targetWaitResult.run.id,
+                        token,
+                        600000 // 10 minutes timeout for the actual check
+                    );
+
+                    if (targetMonitorResult.success) {
+                        if (targetMonitorResult.conclusion === 'success') {
+                            updateProgressStep('step4', 'success', 'Repository check completed successfully');
+                        } else {
+                            updateProgressStep('step4', 'error', `Check failed: ${targetMonitorResult.conclusion}`);
+                        }
+                    } else {
+                        updateProgressStep('step4', 'running', 'Check is taking longer than expected. Looking for issue...');
+                    }
+                }
+
+                // Try to find the issue
+                const issueResult = await findCheckIssue(ownerRepo, token);
+                
+                if (issueResult.success) {
+                    const issueLink = document.createElement('a');
+                    issueLink.href = issueResult.issue.html_url;
+                    issueLink.className = 'issue-link';
+                    issueLink.target = '_blank';
+                    issueLink.rel = 'noopener noreferrer';
+                    issueLink.textContent = `View Check Issue #${issueResult.issue.number}`;
+                    
+                    const step4 = document.getElementById('step4');
+                    step4.appendChild(issueLink);
+                    
                     showStatus(
-                        `Repository check triggered successfully for ${ownerRepo}! ` +
-                        `The workflow is now running. Check the Actions tab in the GitHub repository for progress.`,
+                        `Repository check completed! View the results in issue #${issueResult.issue.number}`,
                         'success'
                     );
-                    
-                    // Clear form after success
-                    setTimeout(() => {
-                        repositoryInput.value = '';
-                        recreateCheckbox.checked = false;
-                        hideStatus();
-                        repositoryInput.disabled = false;
-                        recreateCheckbox.disabled = false;
-                        updateButtonState();
-                    }, 5000);
-                } else if (response.status === 401) {
-                    showStatus('Authentication failed: Invalid or expired GitHub token. Please contact the administrator.', 'error');
-                    repositoryInput.disabled = false;
-                    recreateCheckbox.disabled = false;
-                    updateButtonState();
-                } else if (response.status === 404) {
-                    showStatus('Workflow not found. Please ensure the workflow file exists in the repository.', 'error');
-                    repositoryInput.disabled = false;
-                    recreateCheckbox.disabled = false;
-                    updateButtonState();
                 } else {
-                    const errorData = await response.json().catch(() => ({}));
                     showStatus(
-                        `Failed to trigger workflow: ${errorData.message || response.statusText || 'Unknown error'}`,
-                        'error'
+                        'Repository check has been triggered. Check the target repository for the issue.',
+                        'success'
                     );
+                }
+
+                // Clear form after success
+                setTimeout(() => {
+                    repositoryInput.value = '';
+                    recreateCheckbox.checked = false;
+                    hideStatus();
+                    hideProgress();
                     repositoryInput.disabled = false;
                     recreateCheckbox.disabled = false;
                     updateButtonState();
-                }
+                }, 10000);
 
             } catch (error) {
                 showStatus(`Error: ${error.message}`, 'error');
+                hideProgress();
                 repositoryInput.disabled = false;
                 recreateCheckbox.disabled = false;
                 updateButtonState();
