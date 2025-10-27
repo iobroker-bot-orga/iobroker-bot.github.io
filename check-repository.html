@@ -332,7 +332,14 @@
         // Utility function to format GitHub token with proper prefix
         function formatGitHubToken(token) {
             if (!token) return null;
-            return token.startsWith('github_pat_') ? token : `github_pat_${token}`;
+            // Only add prefix if the token doesn't already have a recognized GitHub token prefix
+            const hasPrefix = token.startsWith('github_pat_') || 
+                            token.startsWith('ghp_') || 
+                            token.startsWith('gho_') || 
+                            token.startsWith('ghu_') || 
+                            token.startsWith('ghs_') || 
+                            token.startsWith('ghr_');
+            return hasPrefix ? token : `github_pat_${token}`;
         }
 
         // Utility function to build GitHub API headers
@@ -342,7 +349,7 @@
             };
             
             if (token) {
-                headers['Authorization'] = `token ${token}`;
+                headers['Authorization'] = `Bearer ${token}`;
             }
             
             return headers;
@@ -601,7 +608,7 @@
                         method: 'POST',
                         headers: {
                             'Accept': 'application/vnd.github.v3+json',
-                            'Authorization': `token ${token}`,
+                            'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
