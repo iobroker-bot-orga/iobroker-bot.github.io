@@ -473,7 +473,8 @@
                     if (response.ok) {
                         const data = await response.json();
                         // Find the most recent run that started after our trigger
-                        const run = data.workflow_runs.find(r => new Date(r.created_at) >= startTime);
+                        // Convert both timestamps to milliseconds since epoch for comparison
+                        const run = data.workflow_runs.find(r => new Date(r.created_at).getTime() >= startTime);
                         
                         if (run) {
                             return { success: true, run };
@@ -600,7 +601,9 @@
 
                 // Step 2: Trigger the workflow
                 updateProgressStep('step2', 'running', 'Triggering workflow...');
-                const startTime = new Date();
+                // Use Date.now() to get current time in milliseconds since epoch (UTC)
+                // This is timezone-independent and can be directly compared with GitHub API timestamps
+                const startTime = Date.now();
                 
                 const response = await fetch(
                     `https://api.github.com/repos/${config.OWNER}/${config.REPO}/actions/workflows/${config.WORKFLOW_ID}/dispatches`,
