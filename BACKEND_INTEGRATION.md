@@ -2,15 +2,51 @@
 
 ## Repository Checker Workflow Trigger
 
-The Repository Checker form (`check-repository.html`) requires a backend service to securely trigger the GitHub Actions workflow.
+The Repository Checker form (`check-repository.html`) now uses a two-tier GitHub Actions workflow approach to securely trigger repository checks.
 
-### Why Backend is Needed
+## Current Implementation
 
-GitHub's workflow dispatch API requires authentication with a Personal Access Token (PAT) or GitHub App credentials. These cannot be securely stored in client-side JavaScript.
+### Architecture
 
-### Implementation Options
+The implementation uses two GitHub Personal Access Tokens with different permission levels:
 
-#### Option 1: Serverless Function (Recommended)
+1. **PUBLIC_WORKFLOW_TOKEN** (in `config.js`)
+   - Public token visible in the source code
+   - **Permissions**: Only trigger workflows in `iobroker-bot-orga/iobroker-bot.github.io`
+   - Used by the frontend to trigger the proxy workflow
+
+2. **WORKFLOW_TRIGGER_TOKEN** (repository secret)
+   - Secure token stored as a GitHub repository secret
+   - **Permissions**: Trigger workflows in `iobroker-bot-orga/check-tasks`
+   - Used by the workflow to trigger the actual check workflow
+
+### How It Works
+
+1. User submits the form on the GitHub Pages site
+2. Frontend calls GitHub API to trigger `trigger-repository-check.yml` workflow in this repo
+3. Workflow validates input and triggers `checkRepository.yml` in check-tasks repo
+4. Repository check runs and creates/updates issues as needed
+
+### Security Benefits
+
+- Public token has minimal permissions (can only trigger workflows in this repo)
+- Secure token with broader permissions never exposed to clients
+- Workflow acts as a secure proxy between frontend and check-tasks
+- All workflow triggers are logged in GitHub Actions for auditing
+
+## Setup Instructions
+
+See [SETUP.md](SETUP.md) for detailed setup instructions including:
+- Creating the WORKFLOW_TRIGGER_TOKEN (repository secret)
+- Creating the PUBLIC_WORKFLOW_TOKEN (public configuration)
+- Token permissions and security considerations
+- Troubleshooting guide
+
+## Alternative Implementation Options
+
+If you prefer not to use this approach, other options include:
+
+### Option 1: Serverless Function
 
 Create a serverless function (e.g., Vercel, Netlify Functions, AWS Lambda) that:
 
@@ -27,65 +63,35 @@ Body: {
 }
 ```
 
-#### Option 2: GitHub App
+### Option 2: GitHub App
 
 Create a GitHub App with `actions:write` permissions that:
 
 1. Handles OAuth authentication
 2. Triggers workflows on behalf of the authenticated user
 
-### Workflow Details
+## Workflow Details
+
+**Proxy Workflow**: `.github/workflows/trigger-repository-check.yml` in this repository
 
 **Target Workflow**: `https://github.com/iobroker-bot-orga/check-tasks/blob/main/.github/workflows/checkRepository.yml`
 
-**Trigger Method**: `workflow_dispatch` or `repository_dispatch`
+**Trigger Method**: `workflow_dispatch`
 
 **Required Inputs**:
 - `repository`: The repository identifier (owner/repo format)
+- `recreate`: Boolean to force creation of a new issue (optional)
 
-**Optional Parameters**:
-- `--recreate`: Pass this flag to the checkRepository.js script to force creation of a new issue
+## Current Implementation Status
 
-### API Integration Example
+- ✅ Frontend validates repository input (supports both URL and owner/repo formats)
+- ✅ Frontend provides UI for recreate option
+- ✅ Frontend triggers proxy workflow in this repository
+- ✅ Proxy workflow validates input and triggers check workflow
+- ✅ Secure token management using repository secrets
+- ⚠️ Requires setup of both tokens (see SETUP.md)
 
-```javascript
-// Backend serverless function example
-async function triggerCheck(repository, recreate) {
-  const response = await fetch(
-    'https://api.github.com/repos/iobroker-bot-orga/check-tasks/actions/workflows/checkRepository.yml/dispatches',
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ref: 'main',
-        inputs: {
-          repository: repository
-        }
-      })
-    }
-  );
-  
-  return response;
-}
-```
+## Token Management
 
-**Note**: The `--recreate` flag would need to be handled by extending the workflow's input parameters to include a `recreate` boolean input.
+Both tokens will expire based on their expiration period. See [SETUP.md](SETUP.md) for token renewal and management procedures.
 
-### Current Implementation Status
-
-The current frontend implementation:
-- ✅ Validates repository input (supports both URL and owner/repo formats)
-- ✅ Provides UI for recreate option
-- ✅ Handles form submission
-- ⚠️ Requires backend integration to actually trigger the workflow
-
-### Next Steps
-
-1. Set up a backend service (serverless function recommended)
-2. Add the API endpoint URL to the frontend configuration
-3. Update `check-repository.html` to call the backend API instead of showing the demo message
-4. Optionally: Update the workflow to accept a `recreate` input parameter

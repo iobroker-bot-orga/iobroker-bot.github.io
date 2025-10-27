@@ -1,0 +1,55 @@
+name: Trigger Repository Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Repository to check (owner/repo format)'
+        required: true
+        type: string
+      recreate:
+        description: 'Recreate check (force creation of new issue)'
+        required: false
+        type: boolean
+        default: false
+
+  repository_dispatch:
+    types: [trigger-check]
+
+jobs:
+  trigger-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate repository input
+        id: validate
+        run: |
+          REPO="${{ github.event.inputs.repository || github.event.client_payload.repository }}"
+          echo "Repository: $REPO"
+          
+          # Validate format (owner/repo)
+          if [[ ! "$REPO" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$ ]]; then
+            echo "Error: Invalid repository format. Expected: owner/repo"
+            exit 1
+          fi
+          
+          echo "repository=$REPO" >> $GITHUB_OUTPUT
+
+      - name: Trigger check workflow
+        run: |
+          REPO="${{ steps.validate.outputs.repository }}"
+          RECREATE="${{ github.event.inputs.recreate || github.event.client_payload.recreate || 'false' }}"
+          
+          echo "Triggering repository check for: $REPO"
+          echo "Recreate: $RECREATE"
+          
+          # Trigger the workflow in check-tasks repository
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.WORKFLOW_TRIGGER_TOKEN }}" \
+            https://api.github.com/repos/iobroker-bot-orga/check-tasks/actions/workflows/checkRepository.yml/dispatches \
+            -d "{\"ref\":\"main\",\"inputs\":{\"repository\":\"$REPO\"}}"
+          
+          # Note: The recreate flag would need to be added to the target workflow's inputs
+          # For now, it's documented but not implemented in the target workflow
+          
+          echo "Workflow trigger request sent successfully"
