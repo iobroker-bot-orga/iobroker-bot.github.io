@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ioBroker Bot - Repository Checker">
+    <title>Repository Checker - ioBroker Bot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 60px 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 700px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .description {
+            color: #666;
+            font-size: 1.1em;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 1em;
+            transition: border-color 0.2s;
+            font-family: inherit;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        input[type="text"].invalid {
+            border-color: #e74c3c;
+        }
+
+        input[type="text"].valid {
+            border-color: #27ae60;
+        }
+
+        .help-text {
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .error-text {
+            color: #e74c3c;
+            font-size: 0.9em;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .checkbox-label {
+            display: inline;
+            cursor: pointer;
+            margin-bottom: 0;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            text-align: center;
+            width: 100%;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .status-message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+            text-align: center;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            .container {
+                padding: 40px 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🔍</div>
+        <h1>Repository Checker</h1>
+        <p class="description">
+            This tool will trigger a repository check on the selected adapter repository. 
+            The check will analyze your repository for compliance with ioBroker best practices and coding standards.
+        </p>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <form id="checkForm">
+            <div class="form-group">
+                <label for="repository">Repository URL or Owner/Repository Name</label>
+                <input 
+                    type="text" 
+                    id="repository" 
+                    name="repository" 
+                    placeholder="e.g., iobroker-community-adapters/ioBroker.template or https://github.com/..."
+                    required
+                >
+                <div class="help-text">Enter either "owner/repository" format or a full GitHub URL</div>
+                <div class="error-text" id="repositoryError">Please enter a valid repository identifier</div>
+            </div>
+
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input 
+                        type="checkbox" 
+                        id="recreate" 
+                        name="recreate"
+                    >
+                    <label for="recreate" class="checkbox-label">
+                        Recreate check (force creation of a new issue even if one exists)
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" id="executeBtn" disabled>Execute</button>
+        </form>
+
+        <a href="index.html" class="back-link">← Back to Tools</a>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        const repositoryInput = document.getElementById('repository');
+        const recreateCheckbox = document.getElementById('recreate');
+        const executeBtn = document.getElementById('executeBtn');
+        const checkForm = document.getElementById('checkForm');
+        const statusMessage = document.getElementById('statusMessage');
+        const repositoryError = document.getElementById('repositoryError');
+
+        // Regular expressions for validation
+        const ownerRepoPattern = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/;
+        const githubUrlPattern = /^https?:\/\/(www\.)?github\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_.-]+)(\.git)?$/;
+
+        function validateRepository(value) {
+            if (!value || value.trim() === '') {
+                return false;
+            }
+
+            value = value.trim();
+
+            // Check if it matches owner/repo format
+            if (ownerRepoPattern.test(value)) {
+                return true;
+            }
+
+            // Check if it matches GitHub URL format
+            if (githubUrlPattern.test(value)) {
+                return true;
+            }
+
+            return false;
+        }
+
+        function extractOwnerRepo(value) {
+            value = value.trim();
+
+            // If it's in owner/repo format, return as-is
+            if (ownerRepoPattern.test(value)) {
+                return value;
+            }
+
+            // If it's a GitHub URL, extract owner/repo
+            const match = value.match(githubUrlPattern);
+            if (match) {
+                return `${match[2]}/${match[3]}`;
+            }
+
+            return null;
+        }
+
+        function updateButtonState() {
+            const isValid = validateRepository(repositoryInput.value);
+            executeBtn.disabled = !isValid;
+
+            if (repositoryInput.value.trim() !== '') {
+                if (isValid) {
+                    repositoryInput.classList.remove('invalid');
+                    repositoryInput.classList.add('valid');
+                    repositoryError.style.display = 'none';
+                } else {
+                    repositoryInput.classList.remove('valid');
+                    repositoryInput.classList.add('invalid');
+                    repositoryError.style.display = 'block';
+                }
+            } else {
+                repositoryInput.classList.remove('valid', 'invalid');
+                repositoryError.style.display = 'none';
+            }
+        }
+
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type}`;
+            statusMessage.style.display = 'block';
+        }
+
+        function hideStatus() {
+            statusMessage.style.display = 'none';
+        }
+
+        repositoryInput.addEventListener('input', updateButtonState);
+        repositoryInput.addEventListener('blur', updateButtonState);
+
+        checkForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const repoValue = repositoryInput.value.trim();
+            if (!validateRepository(repoValue)) {
+                showStatus('Please enter a valid repository identifier', 'error');
+                return;
+            }
+
+            const ownerRepo = extractOwnerRepo(repoValue);
+            const recreate = recreateCheckbox.checked;
+
+            // Disable form during submission
+            executeBtn.disabled = true;
+            repositoryInput.disabled = true;
+            recreateCheckbox.disabled = true;
+
+            showStatus('Triggering repository check...', 'info');
+
+            try {
+                // Check if GitHub token is configured
+                const config = window.REPO_CHECKER_CONFIG;
+                if (!config || !config.GITHUB_TOKEN || config.GITHUB_TOKEN === '') {
+                    showStatus(
+                        'Configuration incomplete: GitHub token not set. Please contact the repository administrator to configure the GITHUB_TOKEN in config.js',
+                        'error'
+                    );
+                    repositoryInput.disabled = false;
+                    recreateCheckbox.disabled = false;
+                    updateButtonState();
+                    return;
+                }
+
+                // Trigger the workflow in this repository
+                const response = await fetch(
+                    `https://api.github.com/repos/${config.OWNER}/${config.REPO}/actions/workflows/${config.WORKFLOW_ID}/dispatches`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/vnd.github.v3+json',
+                            'Authorization': `token ${config.GITHUB_TOKEN}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            ref: 'main',
+                            inputs: {
+                                repository: ownerRepo,
+                                recreate: recreate.toString()
+                            }
+                        })
+                    }
+                );
+
+                if (response.status === 204 || response.status === 200) {
+                    showStatus(
+                        `Repository check triggered successfully for ${ownerRepo}! ` +
+                        `The workflow is now running. Check the Actions tab in the GitHub repository for progress.`,
+                        'success'
+                    );
+                    
+                    // Clear form after success
+                    setTimeout(() => {
+                        repositoryInput.value = '';
+                        recreateCheckbox.checked = false;
+                        hideStatus();
+                        repositoryInput.disabled = false;
+                        recreateCheckbox.disabled = false;
+                        updateButtonState();
+                    }, 5000);
+                } else if (response.status === 401) {
+                    showStatus('Authentication failed: Invalid or expired GitHub token. Please contact the administrator.', 'error');
+                    repositoryInput.disabled = false;
+                    recreateCheckbox.disabled = false;
+                    updateButtonState();
+                } else if (response.status === 404) {
+                    showStatus('Workflow not found. Please ensure the workflow file exists in the repository.', 'error');
+                    repositoryInput.disabled = false;
+                    recreateCheckbox.disabled = false;
+                    updateButtonState();
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    showStatus(
+                        `Failed to trigger workflow: ${errorData.message || response.statusText || 'Unknown error'}`,
+                        'error'
+                    );
+                    repositoryInput.disabled = false;
+                    recreateCheckbox.disabled = false;
+                    updateButtonState();
+                }
+
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                repositoryInput.disabled = false;
+                recreateCheckbox.disabled = false;
+                updateButtonState();
+            }
+        });
+    </script>
+</body>
+</html>
