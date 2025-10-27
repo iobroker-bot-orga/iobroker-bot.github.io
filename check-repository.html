@@ -345,7 +345,9 @@
         // Utility function to build GitHub API headers
         function buildGitHubHeaders(token) {
             const headers = {
-                'Accept': 'application/vnd.github.v3+json'
+                'Accept': 'application/vnd.github.v3+json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
             };
             
             if (token) {
@@ -443,9 +445,13 @@
         async function verifyRepositoryExists(ownerRepo, token) {
             try {
                 const [owner, repo] = ownerRepo.split('/');
+                const url = `https://api.github.com/repos/${owner}/${repo}?_=${Date.now()}`;
                 const response = await fetch(
-                    `https://api.github.com/repos/${owner}/${repo}`,
-                    { headers: buildGitHubHeaders(token) }
+                    url,
+                    { 
+                        headers: buildGitHubHeaders(token),
+                        cache: 'no-store'
+                    }
                 );
 
                 if (response.status === 200) {
@@ -465,9 +471,13 @@
             
             while (Date.now() < endTime) {
                 try {
+                    const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/runs?per_page=5&_=${Date.now()}`;
                     const response = await fetch(
-                        `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/runs?per_page=5`,
-                        { headers: buildGitHubHeaders(token) }
+                        url,
+                        { 
+                            headers: buildGitHubHeaders(token),
+                            cache: 'no-store'
+                        }
                     );
 
                     if (response.ok) {
@@ -496,9 +506,13 @@
             
             while (Date.now() < endTime) {
                 try {
+                    const url = `https://api.github.com/repos/${owner}/${repo}/actions/runs/${runId}?_=${Date.now()}`;
                     const response = await fetch(
-                        `https://api.github.com/repos/${owner}/${repo}/actions/runs/${runId}`,
-                        { headers: buildGitHubHeaders(token) }
+                        url,
+                        { 
+                            headers: buildGitHubHeaders(token),
+                            cache: 'no-store'
+                        }
                     );
 
                     if (response.ok) {
@@ -526,9 +540,13 @@
         async function findCheckIssue(targetRepo, token) {
             try {
                 const [owner, repo] = targetRepo.split('/');
+                const url = `https://api.github.com/repos/${owner}/${repo}/issues?labels=check&state=all&per_page=1&_=${Date.now()}`;
                 const response = await fetch(
-                    `https://api.github.com/repos/${owner}/${repo}/issues?labels=check&state=all&per_page=1`,
-                    { headers: buildGitHubHeaders(token) }
+                    url,
+                    { 
+                        headers: buildGitHubHeaders(token),
+                        cache: 'no-store'
+                    }
                 );
 
                 if (response.ok) {
