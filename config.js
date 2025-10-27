@@ -11,7 +11,7 @@ const CONFIG = {
     // 
     // The actual token that triggers the check-tasks workflow is stored securely
     // as a secret (WORKFLOW_TRIGGER_TOKEN) in this repository's settings.
-    GITHUB_TOKEN: '11BFLRKSA0Ojk37IfuN5RF_rHsmuicwtMWPxuzEzdqjOZfsU9jLHTUtOw9qosJBQK1LPJ7WXHBhW6vWL6a', // To be set by repository administrators
+    GITHUB_TOKEN: '11BFLRKSA0jz4Wf6gbS1Gq_0T65v3db2aT2lM8NWCJLbxeSK5XckUPyhiZbXPIJKphPPMWSM5OmF0tkqx8', // To be set by repository administrators
     
     // Repository information
     OWNER: 'iobroker-bot-orga',
