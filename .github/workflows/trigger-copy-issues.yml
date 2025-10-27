@@ -28,6 +28,8 @@ on:
 jobs:
   trigger-copy-issues:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Validate repository inputs
         id: validate

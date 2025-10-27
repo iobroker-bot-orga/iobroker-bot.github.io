@@ -393,8 +393,17 @@
 
         function showResultLink(targetRepo) {
             const [owner, repo] = targetRepo.split('/');
-            const issuesUrl = `https://github.com/${owner}/${repo}/issues`;
-            resultLink.innerHTML = `<a href="${issuesUrl}" target="_blank" rel="noopener noreferrer">View issues in ${targetRepo} →</a>`;
+            // Escape HTML to prevent XSS
+            const escapeHtml = (str) => {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            };
+            const safeOwner = escapeHtml(owner);
+            const safeRepo = escapeHtml(repo);
+            const safeTargetRepo = escapeHtml(targetRepo);
+            const issuesUrl = `https://github.com/${safeOwner}/${safeRepo}/issues`;
+            resultLink.innerHTML = `<a href="${issuesUrl}" target="_blank" rel="noopener noreferrer">View issues in ${safeTargetRepo} →</a>`;
             resultLink.style.display = 'block';
         }
 
