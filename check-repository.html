@@ -367,7 +367,7 @@
 
         // Sanitize text content to prevent XSS
         function escapeHtml(text) {
-            if (text == null) {
+            if (text === null || text === undefined) {
                 return '';
             }
             const div = document.createElement('div');
@@ -377,7 +377,7 @@
 
         // Safely create a link element
         function createSafeLink(url, text, className) {
-            // Validate URL is from GitHub (including github.io and enterprise instances)
+            // Validate URL is from GitHub
             if (!url || !(url.startsWith('https://github.com/') || url.startsWith('https://api.github.com/'))) {
                 return escapeHtml(text);
             }
