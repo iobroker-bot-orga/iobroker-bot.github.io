@@ -365,6 +365,31 @@
             return headers;
         }
 
+        // Sanitize text content to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Safely create a link element
+        function createSafeLink(url, text, className) {
+            // Validate URL is from GitHub
+            if (!url || !url.startsWith('https://github.com/')) {
+                return escapeHtml(text);
+            }
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.textContent = text;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            if (className) {
+                link.className = className;
+            }
+            return link.outerHTML;
+        }
+
         function validateRepository(value) {
             if (!value || value.trim() === '') {
                 return false;
@@ -689,7 +714,9 @@
                 }
 
                 const intermediateRun = waitResult.run;
-                updateProgressStep('step3', 'running', `Monitoring check workflow run <a href="${intermediateRun.html_url}" target="_blank" rel="noopener noreferrer" class="progress-step-link">${config.OWNER}/${config.REPO}#${intermediateRun.id}</a>...`);
+                const linkText = `${config.OWNER}/${config.REPO}#${intermediateRun.id}`;
+                const safeLink = createSafeLink(intermediateRun.html_url, linkText, 'progress-step-link');
+                updateProgressStep('step3', 'running', `Monitoring check workflow run ${safeLink}...`);
 
                 const monitorResult = await monitorWorkflowRun(
                     config.OWNER,
@@ -734,7 +761,9 @@
                     updateProgressStep('step4', 'running', 'Workflow may still be running. Checking for issue...');
                     // Continue to check for issue even if we can't find the workflow
                 } else {
-                    updateProgressStep('step4', 'running', `Monitoring check workflow run <a href="${targetWaitResult.run.html_url}" target="_blank" rel="noopener noreferrer" class="progress-step-link">${config.CHECK_TASKS_OWNER}/${config.CHECK_TASKS_REPO}#${targetWaitResult.run.id}</a>...`);
+                    const linkText = `${config.CHECK_TASKS_OWNER}/${config.CHECK_TASKS_REPO}#${targetWaitResult.run.id}`;
+                    const safeLink = createSafeLink(targetWaitResult.run.html_url, linkText, 'progress-step-link');
+                    updateProgressStep('step4', 'running', `Monitoring check workflow run ${safeLink}...`);
 
                     const targetMonitorResult = await monitorWorkflowRun(
                         config.CHECK_TASKS_OWNER,
