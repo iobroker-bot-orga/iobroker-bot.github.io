@@ -815,11 +815,13 @@
                         );
                     } else {
                         showStatus(
-                            'Repository check completed successfully.',
+                            'Repository check completed, but no issue was created (repository may already be compliant).',
                             'success'
                         );
                     }
                 } else {
+                    // Workflow did not complete within the timeout period
+                    // This can happen if: 1) workflow run was not found, or 2) workflow is still running
                     showStatus(
                         'Repository check has been triggered. Check the target repository for the issue.',
                         'success'
