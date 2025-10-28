@@ -760,6 +760,8 @@
                     180000 // 3 minutes timeout
                 );
 
+                let workflowCompleted = false;
+
                 if (!targetWaitResult.success) {
                     updateProgressStep('step4', 'running', 'Workflow may still be running. Checking for issue...');
                     // Continue to check for issue even if we can't find the workflow
@@ -777,6 +779,7 @@
                     );
 
                     if (targetMonitorResult.success) {
+                        workflowCompleted = true;
                         if (targetMonitorResult.conclusion === 'success') {
                             updateProgressStep('step4', 'success', 'Repository check completed successfully');
                         } else {
@@ -787,32 +790,45 @@
                     }
                 }
 
-                // Try to find the issue
-                const issueResult = await findCheckIssue(ownerRepo, token);
-                
-                if (issueResult.success) {
-                    const issueLink = document.createElement('a');
-                    issueLink.href = issueResult.issue.html_url;
-                    issueLink.className = 'issue-link';
-                    issueLink.target = '_blank';
-                    issueLink.rel = 'noopener noreferrer';
-                    issueLink.textContent = `View Check Issue #${issueResult.issue.number}`;
+                // Only try to find and display the issue if the workflow has completed
+                if (workflowCompleted) {
+                    const issueResult = await findCheckIssue(ownerRepo, token);
                     
-                    const step4 = document.getElementById('step4');
-                    step4.appendChild(issueLink);
-                    
-                    showStatus(
-                        `Repository check completed! View the results in issue #${issueResult.issue.number}`,
-                        'success'
-                    );
+                    if (issueResult.success) {
+                        // Remove any existing issue links to prevent duplicates
+                        const step4 = document.getElementById('step4');
+                        const existingLinks = step4.querySelectorAll('.issue-link');
+                        existingLinks.forEach(link => link.remove());
+                        
+                        const issueLink = document.createElement('a');
+                        issueLink.href = issueResult.issue.html_url;
+                        issueLink.className = 'issue-link';
+                        issueLink.target = '_blank';
+                        issueLink.rel = 'noopener noreferrer';
+                        issueLink.textContent = `View Check Issue #${issueResult.issue.number}`;
+                        
+                        step4.appendChild(issueLink);
+                        
+                        showStatus(
+                            `Repository check completed! View the results in issue #${issueResult.issue.number}`,
+                            'success'
+                        );
+                    } else {
+                        showStatus(
+                            'Repository check completed, but no issue was created (repository may already be compliant).',
+                            'success'
+                        );
+                    }
                 } else {
+                    // Workflow did not complete within the timeout period
+                    // This can happen if: 1) workflow run was not found, or 2) workflow is still running
                     showStatus(
                         'Repository check has been triggered. Check the target repository for the issue.',
                         'success'
                     );
                 }
 
-                // Clear form after success
+                // Clear form after success - doubled the timeout from 10s to 20s
                 setTimeout(() => {
                     repositoryInput.value = '';
                     recreateCheckbox.checked = false;
@@ -821,7 +837,7 @@
                     repositoryInput.disabled = false;
                     recreateCheckbox.disabled = false;
                     updateButtonState();
-                }, 10000);
+                }, 20000);
 
             } catch (error) {
                 showStatus(`Error: ${error.message}`, 'error');
