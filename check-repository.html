@@ -367,21 +367,24 @@
 
         // Sanitize text content to prevent XSS
         function escapeHtml(text) {
+            if (text == null) {
+                return '';
+            }
             const div = document.createElement('div');
-            div.textContent = text;
+            div.textContent = String(text);
             return div.innerHTML;
         }
 
         // Safely create a link element
         function createSafeLink(url, text, className) {
-            // Validate URL is from GitHub
-            if (!url || !url.startsWith('https://github.com/')) {
+            // Validate URL is from GitHub (including github.io and enterprise instances)
+            if (!url || !(url.startsWith('https://github.com/') || url.startsWith('https://api.github.com/'))) {
                 return escapeHtml(text);
             }
             
             const link = document.createElement('a');
             link.href = url;
-            link.textContent = text;
+            link.textContent = String(text);
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
             if (className) {
