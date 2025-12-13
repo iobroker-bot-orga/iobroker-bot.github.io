@@ -27,6 +27,8 @@ on:
 jobs:
   trigger-manage-pr:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Validate repository input
         id: validate

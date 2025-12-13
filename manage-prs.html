@@ -392,8 +392,22 @@
 
         // Safely create a link element
         function createSafeLink(url, text, className) {
-            // Validate URL is from GitHub
-            if (!url || !(url.startsWith('https://github.com/') || url.startsWith('https://api.github.com/'))) {
+            // Validate URL is from GitHub (must start with the exact GitHub domain)
+            if (!url || typeof url !== 'string') {
+                return escapeHtml(text);
+            }
+            
+            try {
+                const parsedUrl = new URL(url);
+                // Only allow github.com and api.github.com as the exact hostname
+                if (parsedUrl.hostname !== 'github.com' && parsedUrl.hostname !== 'api.github.com') {
+                    return escapeHtml(text);
+                }
+                // Ensure https protocol
+                if (parsedUrl.protocol !== 'https:') {
+                    return escapeHtml(text);
+                }
+            } catch (e) {
                 return escapeHtml(text);
             }
             
@@ -480,9 +494,16 @@
             const step = document.getElementById(stepId);
             step.className = `progress-step ${status}`;
             const statusElement = step.querySelector('.progress-step-status');
-            // Check if statusText contains safe HTML from createSafeLink (case-insensitive check)
-            if (typeof statusText === 'string' && /<a\s/i.test(statusText) && statusText.includes('github.com')) {
-                statusElement.innerHTML = statusText;
+            // Check if statusText contains safe HTML from createSafeLink
+            // Only allow innerHTML if it's a string and contains an anchor tag with a validated GitHub URL
+            if (typeof statusText === 'string' && /<a\s/i.test(statusText)) {
+                // Additional validation: ensure it's from our createSafeLink function
+                // by checking for both the anchor tag and the GitHub-specific attributes
+                if (statusText.includes('target="_blank"') && statusText.includes('rel="noopener noreferrer"')) {
+                    statusElement.innerHTML = statusText;
+                } else {
+                    statusElement.textContent = statusText;
+                }
             } else {
                 statusElement.textContent = statusText;
             }
