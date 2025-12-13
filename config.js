@@ -21,10 +21,20 @@ const CONFIG = {
     // Check-tasks repository information
     CHECK_TASKS_OWNER: 'iobroker-bot-orga',
     CHECK_TASKS_REPO: 'check-tasks',
-    CHECK_TASKS_WORKFLOW_ID: 'checkRepository.yml'
+    CHECK_TASKS_WORKFLOW_ID: 'checkRepository.yml',
+    
+    // Manage-PRs workflow information
+    MANAGE_PRS_WORKFLOW_ID: 'trigger-manage-pr.yml',
+    MANAGE_PRS_TARGET_OWNER: 'iobroker-bot-orga',
+    MANAGE_PRS_TARGET_REPO: 'manage-prs',
+    MANAGE_PRS_TARGET_WORKFLOW_ID: 'processRepository.yml',
+    MANAGE_PRS_TEMPLATES_REPO: 'iobroker-bot-orga/manage-prs',
+    MANAGE_PRS_TEMPLATES_BRANCH: 'main',
+    MANAGE_PRS_TEMPLATES_PATH: 'templates'
 };
 
-// Export for use in check-repository.html
+// Export for use in check-repository.html and manage-prs.html
 if (typeof window !== 'undefined') {
     window.REPO_CHECKER_CONFIG = CONFIG;
+    window.MANAGE_PRS_CONFIG = CONFIG;
 }
