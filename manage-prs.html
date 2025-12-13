@@ -479,7 +479,13 @@
         function updateProgressStep(stepId, status, statusText) {
             const step = document.getElementById(stepId);
             step.className = `progress-step ${status}`;
-            step.querySelector('.progress-step-status').innerHTML = statusText;
+            const statusElement = step.querySelector('.progress-step-status');
+            // Check if statusText contains HTML (from createSafeLink)
+            if (statusText.includes('<a ')) {
+                statusElement.innerHTML = statusText;
+            } else {
+                statusElement.textContent = statusText;
+            }
         }
 
         function showProgress() {
@@ -729,8 +735,8 @@
                     return;
                 }
 
-                updateProgressStep('step1', 'success', `Repository verified: ${repoCheck.data.full_name}`);
-                updateProgressStep('step2', 'success', `Template selected: ${template}`);
+                updateProgressStep('step1', 'success', `Repository verified: ${escapeHtml(repoCheck.data.full_name)}`);
+                updateProgressStep('step2', 'success', `Template selected: ${escapeHtml(template)}`);
 
                 // Step 3: Trigger the workflow
                 updateProgressStep('step3', 'running', 'Triggering workflow...');
@@ -897,7 +903,7 @@
                         step5.appendChild(prLink);
                         
                         showStatus(
-                            `Pull Request created successfully! View PR #${prResult.pr.number}`,
+                            `Pull Request created successfully! View PR #${escapeHtml(prResult.pr.number)}`,
                             'success'
                         );
                     } else {
