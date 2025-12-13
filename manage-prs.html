@@ -480,8 +480,8 @@
             const step = document.getElementById(stepId);
             step.className = `progress-step ${status}`;
             const statusElement = step.querySelector('.progress-step-status');
-            // Check if statusText contains HTML (from createSafeLink)
-            if (statusText.includes('<a ')) {
+            // Check if statusText contains safe HTML from createSafeLink (case-insensitive check)
+            if (typeof statusText === 'string' && /<a\s/i.test(statusText) && statusText.includes('github.com')) {
                 statusElement.innerHTML = statusText;
             } else {
                 statusElement.textContent = statusText;
@@ -531,7 +531,7 @@
                     .sort();
 
                 if (templates.length === 0) {
-                    throw new Error('No templates found');
+                    throw new Error('No templates found in the templates directory. Please check the repository configuration or contact your administrator.');
                 }
 
                 // Populate the select dropdown
