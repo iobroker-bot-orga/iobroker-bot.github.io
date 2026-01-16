@@ -66,9 +66,9 @@ jobs:
           fi
           
           # Check if source is a GitHub issue URL
-          if [[ "$SOURCE" =~ ^https?://github\.com/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_.-]+)/issues/[0-9]+$ ]]; then
-            OWNER="${BASH_REMATCH[1]}"
-            REPO_NAME="${BASH_REMATCH[2]}"
+          if [[ "$SOURCE" =~ ^https?://(www\.)?github\.com/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_.-]+)/issues/[0-9]+$ ]]; then
+            OWNER="${BASH_REMATCH[2]}"
+            REPO_NAME="${BASH_REMATCH[3]}"
             
             # Validate it's an ioBroker adapter
             if [[ ! "$REPO_NAME" =~ ^ioBroker\. ]]; then
