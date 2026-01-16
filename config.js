@@ -36,12 +36,17 @@ const CONFIG = {
     COPY_ISSUES_WORKFLOW_ID: 'trigger-copy-issues.yml',
     TOOLS_OWNER: 'iobroker-bot-orga',
     TOOLS_REPO: 'tools',
-    TOOLS_WORKFLOW_ID: 'copy-issues.yml'
+    TOOLS_WORKFLOW_ID: 'copy-issues.yml',
+    
+    // Dependabot Recreate workflow information
+    DEPENDABOT_RECREATE_WORKFLOW_ID: 'trigger-dependabot-recreate.yml',
+    DEPENDABOT_RECREATE_TOOLS_WORKFLOW_ID: 'dependabot-recreate.yml'
 };
 
-// Export for use in check-repository.html, manage-prs.html, and copy-issues.html
+// Export for use in check-repository.html, manage-prs.html, copy-issues.html, and dependabot-recreate.html
 if (typeof window !== 'undefined') {
     window.REPO_CHECKER_CONFIG = CONFIG;
     window.MANAGE_PRS_CONFIG = CONFIG;
     window.COPY_ISSUES_CONFIG = CONFIG;
+    window.DEPENDABOT_RECREATE_CONFIG = CONFIG;
 }
