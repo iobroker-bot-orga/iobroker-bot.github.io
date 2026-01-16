@@ -33,6 +33,7 @@ jobs:
     steps:
       - name: Validate target repository
         id: validate_target
+        shell: bash
         run: |
           TARGET="${{ github.event.inputs.target || github.event.client_payload.target }}"
           echo "Target repository: $TARGET"
@@ -54,6 +55,7 @@ jobs:
 
       - name: Validate source repository or issue
         id: validate_source
+        shell: bash
         run: |
           SOURCE="${{ github.event.inputs.source || github.event.client_payload.source }}"
           echo "Source: $SOURCE"
@@ -92,6 +94,7 @@ jobs:
           echo "source=$SOURCE" >> $GITHUB_OUTPUT
 
       - name: Trigger copy-issues workflow
+        shell: bash
         run: |
           TARGET="${{ steps.validate_target.outputs.target }}"
           SOURCE="${{ steps.validate_source.outputs.source }}"

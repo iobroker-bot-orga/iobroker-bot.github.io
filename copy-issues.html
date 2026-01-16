@@ -517,6 +517,8 @@
         function updateProgressStep(stepId, status, statusText) {
             const step = document.getElementById(stepId);
             step.className = `progress-step ${status}`;
+            // Note: statusText may contain HTML from createSafeLink() which safely validates URLs
+            // and uses textContent for link text. All other inputs are plain text strings.
             step.querySelector('.progress-step-status').innerHTML = statusText;
         }
 
