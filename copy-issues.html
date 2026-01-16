@@ -534,14 +534,16 @@
             });
         }
 
-        async function verifyRepositoryExists(ownerRepo, token) {
+        async function verifyRepositoryExists(ownerRepo) {
             try {
                 const [owner, repo] = ownerRepo.split('/');
                 const url = `https://api.github.com/repos/${owner}/${repo}`;
                 const response = await fetch(
                     url,
                     { 
-                        headers: buildGitHubHeaders(token),
+                        headers: {
+                            'Accept': 'application/vnd.github.v3+json'
+                        },
                         cache: 'no-store'
                     }
                 );
@@ -675,7 +677,7 @@
                 updateProgressStep('step1', 'running', 'Checking if repositories exist...');
                 
                 const targetOwnerRepo = extractOwnerRepo(targetValue);
-                const targetCheck = await verifyRepositoryExists(targetOwnerRepo, token);
+                const targetCheck = await verifyRepositoryExists(targetOwnerRepo);
                 
                 if (!targetCheck.exists) {
                     updateProgressStep('step1', 'error', `Failed: Target ${targetCheck.error}`);
@@ -691,7 +693,7 @@
                 // For source, extract owner/repo if it's an issue URL
                 const sourceOwnerRepo = extractOwnerRepo(sourceValue);
                 if (sourceOwnerRepo) {
-                    const sourceCheck = await verifyRepositoryExists(sourceOwnerRepo, token);
+                    const sourceCheck = await verifyRepositoryExists(sourceOwnerRepo);
                     
                     if (!sourceCheck.exists) {
                         updateProgressStep('step1', 'error', `Failed: Source ${sourceCheck.error}`);

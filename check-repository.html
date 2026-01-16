@@ -478,14 +478,16 @@
             });
         }
 
-        async function verifyRepositoryExists(ownerRepo, token) {
+        async function verifyRepositoryExists(ownerRepo) {
             try {
                 const [owner, repo] = ownerRepo.split('/');
                 const url = `https://api.github.com/repos/${owner}/${repo}`;
                 const response = await fetch(
                     url,
                     { 
-                        headers: buildGitHubHeaders(token),
+                        headers: {
+                            'Accept': 'application/vnd.github.v3+json'
+                        },
                         cache: 'no-store'
                     }
                 );
@@ -639,7 +641,7 @@
 
                 // Step 1: Verify repository exists
                 updateProgressStep('step1', 'running', 'Checking if repository exists...');
-                const repoCheck = await verifyRepositoryExists(ownerRepo, token);
+                const repoCheck = await verifyRepositoryExists(ownerRepo);
                 
                 if (!repoCheck.exists) {
                     updateProgressStep('step1', 'error', `Failed: ${repoCheck.error}`);
