@@ -534,6 +534,7 @@
             });
         }
 
+        //headers: buildGitHubHeaders(token),
         async function verifyRepositoryExists(ownerRepo, token) {
             try {
                 const [owner, repo] = ownerRepo.split('/');
@@ -541,7 +542,6 @@
                 const response = await fetch(
                     url,
                     { 
-                        //headers: buildGitHubHeaders(token),
                         cache: 'no-store'
                     }
                 );
