@@ -30,11 +30,18 @@ const CONFIG = {
     MANAGE_PRS_TARGET_WORKFLOW_ID: 'processRepository.yml',
     MANAGE_PRS_TEMPLATES_REPO: 'iobroker-bot-orga/manage-prs',
     MANAGE_PRS_TEMPLATES_BRANCH: 'main',
-    MANAGE_PRS_TEMPLATES_PATH: 'templates'
+    MANAGE_PRS_TEMPLATES_PATH: 'templates',
+    
+    // Copy-Issues workflow information
+    COPY_ISSUES_WORKFLOW_ID: 'trigger-copy-issues.yml',
+    TOOLS_OWNER: 'iobroker-bot-orga',
+    TOOLS_REPO: 'tools',
+    TOOLS_WORKFLOW_ID: 'copy-issues.yml'
 };
 
-// Export for use in check-repository.html and manage-prs.html
+// Export for use in check-repository.html, manage-prs.html, and copy-issues.html
 if (typeof window !== 'undefined') {
     window.REPO_CHECKER_CONFIG = CONFIG;
     window.MANAGE_PRS_CONFIG = CONFIG;
+    window.COPY_ISSUES_CONFIG = CONFIG;
 }
