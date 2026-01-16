@@ -1,0 +1,78 @@
+name: Trigger Dependabot Recreate
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Target repository (owner/repo format, must be ioBroker adapter)'
+        required: true
+        type: string
+
+  repository_dispatch:
+    types: [trigger-dependabot-recreate]
+
+jobs:
+  trigger-dependabot-recreate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate repository
+        id: validate
+        shell: bash
+        run: |
+          REPO="${{ github.event.inputs.repository || github.event.client_payload.repository }}"
+          echo "Target repository: $REPO"
+          
+          # Validate format (owner/repo)
+          if [[ ! "$REPO" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$ ]]; then
+            echo "Error: Invalid repository format. Expected: owner/repo"
+            exit 1
+          fi
+          
+          # Extract repository name and validate it's an ioBroker adapter
+          REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
+          if [[ ! "$REPO_NAME" =~ ^ioBroker\. ]]; then
+            echo "Error: Repository must be an ioBroker adapter (repository name must start with 'ioBroker.')"
+            exit 1
+          fi
+          
+          echo "repository=$REPO" >> $GITHUB_OUTPUT
+
+      - name: Trigger dependabot-recreate workflow
+        shell: bash
+        run: |
+          REPO="${{ steps.validate.outputs.repository }}"
+          
+          echo "Triggering dependabot-recreate workflow for: $REPO"
+          
+          # Build the JSON payload
+          JSON_PAYLOAD=$(jq -n \
+            --arg repo "$REPO" \
+            '{
+              ref: "main",
+              inputs: {
+                repository: $repo
+              }
+            }')
+          
+          echo "JSON Payload:"
+          echo "$JSON_PAYLOAD"
+          
+          # Trigger the workflow in tools repository
+          RESPONSE=$(curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.WORKFLOW_TRIGGER_TOKEN }}" \
+            -w "\n%{http_code}" \
+            https://api.github.com/repos/iobroker-bot-orga/tools/actions/workflows/dependabot-recreate.yml/dispatches \
+            -d "$JSON_PAYLOAD")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          
+          if [ "$HTTP_CODE" -eq 204 ] || [ "$HTTP_CODE" -eq 200 ]; then
+            echo "Workflow trigger request sent successfully (HTTP $HTTP_CODE)"
+          else
+            echo "Error: Workflow trigger request failed with HTTP $HTTP_CODE"
+            echo "$RESPONSE"
+            exit 1
+          fi
