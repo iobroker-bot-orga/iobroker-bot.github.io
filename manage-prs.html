@@ -580,8 +580,9 @@
         async function verifyRepositoryExists(ownerRepo, token) {
             try {
                 const [owner, repo] = ownerRepo.split('/');
+                const url = `https://api.github.com/repos/${owner}/${repo}`;
                 const response = await fetch(
-                    `https://api.github.com/repos/${owner}/${repo}`,
+                    url,
                     { 
                         headers: buildGitHubHeaders(token),
                         cache: 'no-store'
@@ -591,9 +592,9 @@
                 if (response.status === 200) {
                     return { exists: true, data: await response.json() };
                 } else if (response.status === 404) {
-                    return { exists: false, error: 'Repository not found' };
+                    return { exists: false, error: `Repository not found (${url})` };
                 } else {
-                    return { exists: false, error: `HTTP ${response.status}: ${response.statusText}` };
+                    return { exists: false, error: `HTTP ${response.status}: ${response.statusText} (${url})` };
                 }
             } catch (error) {
                 return { exists: false, error: error.message };
