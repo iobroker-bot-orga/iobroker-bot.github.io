@@ -1,0 +1,145 @@
+name: Trigger Copy Issues
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target repository (owner/repo format, must be ioBroker adapter)'
+        required: true
+        type: string
+      source:
+        description: 'Source repository or issue URL (owner/repo format or full URL, must be ioBroker adapter)'
+        required: true
+        type: string
+      force:
+        description: 'Force copy even if issue already exists'
+        required: false
+        type: boolean
+        default: false
+      include-closed:
+        description: 'Include closed issues'
+        required: false
+        type: boolean
+        default: false
+
+  repository_dispatch:
+    types: [trigger-copy-issues]
+
+jobs:
+  trigger-copy-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate target repository
+        id: validate_target
+        shell: bash
+        run: |
+          TARGET="${{ github.event.inputs.target || github.event.client_payload.target }}"
+          echo "Target repository: $TARGET"
+          
+          # Validate format (owner/repo)
+          if [[ ! "$TARGET" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$ ]]; then
+            echo "Error: Invalid target repository format. Expected: owner/repo"
+            exit 1
+          fi
+          
+          # Extract repository name and validate it's an ioBroker adapter
+          REPO_NAME=$(echo "$TARGET" | cut -d'/' -f2)
+          if [[ ! "$REPO_NAME" =~ ^ioBroker\. ]]; then
+            echo "Error: Target repository must be an ioBroker adapter (repository name must start with 'ioBroker.')"
+            exit 1
+          fi
+          
+          echo "target=$TARGET" >> $GITHUB_OUTPUT
+
+      - name: Validate source repository or issue
+        id: validate_source
+        shell: bash
+        run: |
+          SOURCE="${{ github.event.inputs.source || github.event.client_payload.source }}"
+          echo "Source: $SOURCE"
+          
+          if [[ -z "$SOURCE" ]]; then
+            echo "Error: Source is required"
+            exit 1
+          fi
+          
+          # Check if source is a GitHub issue URL
+          if [[ "$SOURCE" =~ ^https?://(www\.)?github\.com/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_.-]+)/issues/[0-9]+$ ]]; then
+            OWNER="${BASH_REMATCH[2]}"
+            REPO_NAME="${BASH_REMATCH[3]}"
+            
+            # Validate it's an ioBroker adapter
+            if [[ ! "$REPO_NAME" =~ ^ioBroker\. ]]; then
+              echo "Error: Source repository must be an ioBroker adapter (repository name must start with 'ioBroker.')"
+              exit 1
+            fi
+            echo "Source is a valid issue URL"
+          # Check if source is owner/repo format
+          elif [[ "$SOURCE" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$ ]]; then
+            REPO_NAME=$(echo "$SOURCE" | cut -d'/' -f2)
+            
+            # Validate it's an ioBroker adapter
+            if [[ ! "$REPO_NAME" =~ ^ioBroker\. ]]; then
+              echo "Error: Source repository must be an ioBroker adapter (repository name must start with 'ioBroker.')"
+              exit 1
+            fi
+            echo "Source is a valid repository"
+          else
+            echo "Error: Invalid source format. Expected: owner/repo or GitHub issue URL"
+            exit 1
+          fi
+          
+          echo "source=$SOURCE" >> $GITHUB_OUTPUT
+
+      - name: Trigger copy-issues workflow
+        shell: bash
+        run: |
+          TARGET="${{ steps.validate_target.outputs.target }}"
+          SOURCE="${{ steps.validate_source.outputs.source }}"
+          FORCE="${{ github.event.inputs.force || github.event.client_payload.force || 'false' }}"
+          INCLUDE_CLOSED="${{ github.event.inputs.include-closed || github.event.client_payload.include-closed || 'false' }}"
+          
+          echo "Triggering copy-issues workflow"
+          echo "Target: $TARGET"
+          echo "Source: $SOURCE"
+          echo "Force: $FORCE"
+          echo "Include closed: $INCLUDE_CLOSED"
+          
+          # Build the JSON payload
+          JSON_PAYLOAD=$(jq -n \
+            --arg target "$TARGET" \
+            --arg source "$SOURCE" \
+            --argjson force "$FORCE" \
+            --argjson include_closed "$INCLUDE_CLOSED" \
+            '{
+              ref: "main",
+              inputs: {
+                target: $target,
+                source: $source,
+                force: $force,
+                "include-closed": $include_closed
+              }
+            }')
+          
+          echo "JSON Payload:"
+          echo "$JSON_PAYLOAD"
+          
+          # Trigger the workflow in tools repository
+          RESPONSE=$(curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.WORKFLOW_TRIGGER_TOKEN }}" \
+            -w "\n%{http_code}" \
+            https://api.github.com/repos/iobroker-bot-orga/tools/actions/workflows/copy-issues.yml/dispatches \
+            -d "$JSON_PAYLOAD")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          
+          if [ "$HTTP_CODE" -eq 204 ] || [ "$HTTP_CODE" -eq 200 ]; then
+            echo "Workflow trigger request sent successfully (HTTP $HTTP_CODE)"
+          else
+            echo "Error: Workflow trigger request failed with HTTP $HTTP_CODE"
+            echo "$RESPONSE"
+            exit 1
+          fi
