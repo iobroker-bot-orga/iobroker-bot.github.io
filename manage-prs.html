@@ -603,6 +603,9 @@
             }
         }
 
+        // Clock skew buffer in milliseconds to account for time differences between browser and GitHub servers
+        const CLOCK_SKEW_BUFFER_MS = 10000; // 10 seconds
+
         async function waitForWorkflowRun(owner, repo, workflowId, token, startTime, timeout = 120000, knownRunId = null) {
             // If we have a known run ID from the dispatch response, use it directly
             if (knownRunId) {
@@ -639,8 +642,8 @@
 
                     if (response.ok) {
                         const data = await response.json();
-                        // Subtract 10 seconds from startTime to account for clock skew between browser and GitHub servers
-                        const adjustedStartTime = startTime - 10000;
+                        // Subtract buffer from startTime to account for clock skew between browser and GitHub servers
+                        const adjustedStartTime = startTime - CLOCK_SKEW_BUFFER_MS;
                         const run = data.workflow_runs.find(r => new Date(r.created_at).getTime() >= adjustedStartTime);
                         
                         if (run) {
@@ -855,7 +858,7 @@
                     config.MANAGE_PRS_WORKFLOW_ID,
                     token,
                     startTime,
-                    120000,
+                    undefined, // use default timeout
                     workflowRunId
                 );
 
