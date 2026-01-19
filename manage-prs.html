@@ -603,7 +603,31 @@
             }
         }
 
-        async function waitForWorkflowRun(owner, repo, workflowId, token, startTime, timeout = 120000) {
+        // Clock skew buffer in milliseconds to account for time differences between browser and GitHub servers
+        const CLOCK_SKEW_BUFFER_MS = 10000; // 10 seconds
+
+        async function waitForWorkflowRun(owner, repo, workflowId, token, startTime, timeout = 120000, knownRunId = null) {
+            // If we have a known run ID from the dispatch response, use it directly
+            if (knownRunId) {
+                try {
+                    const response = await fetch(
+                        `https://api.github.com/repos/${owner}/${repo}/actions/runs/${knownRunId}?_=${Date.now()}`,
+                        { 
+                            headers: buildGitHubHeaders(token),
+                            cache: 'no-store'
+                        }
+                    );
+
+                    if (response.ok) {
+                        const run = await response.json();
+                        return { success: true, run };
+                    }
+                } catch (error) {
+                    console.error('Error fetching workflow run by ID:', error);
+                    // Fall through to time-based search as fallback
+                }
+            }
+
             const endTime = Date.now() + timeout;
             
             while (Date.now() < endTime) {
@@ -618,7 +642,9 @@
 
                     if (response.ok) {
                         const data = await response.json();
-                        const run = data.workflow_runs.find(r => new Date(r.created_at).getTime() >= startTime);
+                        // Subtract buffer from startTime to account for clock skew between browser and GitHub servers
+                        const adjustedStartTime = startTime - CLOCK_SKEW_BUFFER_MS;
+                        const run = data.workflow_runs.find(r => new Date(r.created_at).getTime() >= adjustedStartTime);
                         
                         if (run) {
                             return { success: true, run };
@@ -807,6 +833,20 @@
                     return;
                 }
 
+                // Try to extract workflow_run_id if the API returns it (status 200)
+                let workflowRunId = null;
+                if (response.status === 200) {
+                    try {
+                        const responseData = await response.json();
+                        workflowRunId = responseData.workflow_run_id;
+                        if (workflowRunId) {
+                            console.log('Received workflow_run_id from dispatch:', workflowRunId);
+                        }
+                    } catch (error) {
+                        console.error('Error parsing dispatch response:', error);
+                    }
+                }
+
                 updateProgressStep('step3', 'success', 'Workflow triggered successfully');
 
                 // Step 4: Wait for and monitor intermediate workflow
@@ -817,7 +857,9 @@
                     config.REPO,
                     config.MANAGE_PRS_WORKFLOW_ID,
                     token,
-                    startTime
+                    startTime,
+                    undefined, // use default timeout
+                    workflowRunId
                 );
 
                 if (!waitResult.success) {
