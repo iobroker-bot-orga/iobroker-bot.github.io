@@ -40,7 +40,16 @@ const CONFIG = {
     
     // Dependabot Recreate workflow information
     DEPENDABOT_RECREATE_WORKFLOW_ID: 'trigger-dependabot-recreate.yml',
-    DEPENDABOT_RECREATE_TOOLS_WORKFLOW_ID: 'dependabot-recreate.yml'
+    DEPENDABOT_RECREATE_TOOLS_WORKFLOW_ID: 'dependabot-recreate.yml',
+
+    // Announcement workflow information
+    ANNOUNCEMENT_WORKFLOW_ID: 'trigger-announcement.yml',
+    ANNOUNCEMENT_TARGET_OWNER: 'iobroker-bot-orga',
+    ANNOUNCEMENT_TARGET_REPO: 'announcements',
+    ANNOUNCEMENT_TARGET_WORKFLOW_ID: 'announceRepository.yml',
+    ANNOUNCEMENT_TEMPLATES_REPO: 'iobroker-bot-orga/announcements',
+    ANNOUNCEMENT_TEMPLATES_BRANCH: 'main',
+    ANNOUNCEMENT_TEMPLATES_PATH: 'templates'
 };
 
 // Export for use in check-repository.html, manage-prs.html, copy-issues.html, and dependabot-recreate.html
@@ -49,4 +58,5 @@ if (typeof window !== 'undefined') {
     window.MANAGE_PRS_CONFIG = CONFIG;
     window.COPY_ISSUES_CONFIG = CONFIG;
     window.DEPENDABOT_RECREATE_CONFIG = CONFIG;
+    window.ANNOUNCEMENT_CONFIG = CONFIG;
 }
