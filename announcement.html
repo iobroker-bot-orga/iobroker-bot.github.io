@@ -376,38 +376,6 @@
             return div.innerHTML;
         }
 
-        // Safely create a link element
-        function createSafeLink(url, text, className) {
-            // Validate URL is from GitHub (must start with the exact GitHub domain)
-            if (!url || typeof url !== 'string') {
-                return escapeHtml(text);
-            }
-            
-            try {
-                const parsedUrl = new URL(url);
-                // Only allow github.com and api.github.com as the exact hostname
-                if (parsedUrl.hostname !== 'github.com' && parsedUrl.hostname !== 'api.github.com') {
-                    return escapeHtml(text);
-                }
-                // Ensure https protocol
-                if (parsedUrl.protocol !== 'https:') {
-                    return escapeHtml(text);
-                }
-            } catch (e) {
-                return escapeHtml(text);
-            }
-            
-            const link = document.createElement('a');
-            link.href = url;
-            link.textContent = String(text);
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            if (className) {
-                link.className = className;
-            }
-            return link.outerHTML;
-        }
-
         function validateRepository(value) {
             if (!value || value.trim() === '') {
                 return false;
@@ -480,19 +448,7 @@
             const step = document.getElementById(stepId);
             step.className = `progress-step ${status}`;
             const statusElement = step.querySelector('.progress-step-status');
-            // Check if statusText contains safe HTML from createSafeLink
-            // Only allow innerHTML if it's a string and contains an anchor tag with a validated GitHub URL
-            if (typeof statusText === 'string' && /<a\s/i.test(statusText)) {
-                // Additional validation: ensure it's from our createSafeLink function
-                // by checking for both the anchor tag and the GitHub-specific attributes
-                if (statusText.includes('target="_blank"') && statusText.includes('rel="noopener noreferrer"')) {
-                    statusElement.innerHTML = statusText;
-                } else {
-                    statusElement.textContent = statusText;
-                }
-            } else {
-                statusElement.textContent = statusText;
-            }
+            statusElement.textContent = statusText;
         }
 
         function showProgress() {
@@ -538,7 +494,7 @@
                     .sort();
 
                 if (templates.length === 0) {
-                    throw new Error('No templates found in the templates directory. Please check the repository configuration or contact your administrator.');
+                    throw new Error('No templates found. Please check the repository configuration.');
                 }
 
                 // Populate the select dropdown
@@ -591,6 +547,7 @@
 
         // Clock skew buffer in milliseconds to account for time differences between browser and GitHub servers
         const CLOCK_SKEW_BUFFER_MS = 10000; // 10 seconds
+        const FORM_RESET_DELAY_MS = 20000;
 
         async function waitForWorkflowRun(owner, repo, workflowId, token, startTime, timeout = 120000, knownRunId = null) {
             // If we have a known run ID from the dispatch response, use it directly
@@ -630,7 +587,7 @@
                         const data = await response.json();
                         // Subtract buffer from startTime to account for clock skew between browser and GitHub servers
                         const adjustedStartTime = startTime - CLOCK_SKEW_BUFFER_MS;
-                        const run = data.workflow_runs.find(r => new Date(r.created_at).getTime() >= adjustedStartTime);
+                        const run = data.workflow_runs.find(r => new Date(r.created_at).getTime() > adjustedStartTime);
                         
                         if (run) {
                             return { success: true, run };
@@ -832,9 +789,7 @@
                 }
 
                 const intermediateRun = waitResult.run;
-                const linkText = `${config.OWNER}/${config.REPO}#${intermediateRun.id}`;
-                const safeLink = createSafeLink(intermediateRun.html_url, linkText, 'progress-step-link');
-                updateProgressStep('step4', 'running', `Monitoring workflow run ${safeLink}...`);
+                updateProgressStep('step4', 'running', `Monitoring workflow run ${intermediateRun.html_url}...`);
 
                 const monitorResult = await monitorWorkflowRun(
                     config.OWNER,
@@ -882,9 +837,7 @@
                 if (!targetWaitResult.success) {
                     updateProgressStep('step5', 'running', 'Workflow may still be running...');
                 } else {
-                    const linkText = `${config.ANNOUNCEMENT_TARGET_OWNER}/${config.ANNOUNCEMENT_TARGET_REPO}#${targetWaitResult.run.id}`;
-                    const safeLink = createSafeLink(targetWaitResult.run.html_url, linkText, 'progress-step-link');
-                    updateProgressStep('step5', 'running', `Monitoring announcement workflow run ${safeLink}...`);
+                    updateProgressStep('step5', 'running', `Monitoring announcement workflow run ${targetWaitResult.run.html_url}...`);
 
                     const targetMonitorResult = await monitorWorkflowRun(
                         config.ANNOUNCEMENT_TARGET_OWNER,
@@ -912,7 +865,7 @@
                 existingLinks.forEach(link => link.remove());
 
                 const [targetOwner, targetRepo] = ownerRepo.split('/');
-                const issuesUrl = `https://github.com/${targetOwner}/${targetRepo}/issues`;
+                const issuesUrl = `https://github.com/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/issues`;
                 const issueLink = document.createElement('a');
                 issueLink.href = issuesUrl;
                 issueLink.className = 'pr-link';
@@ -944,7 +897,7 @@
                     templateSelect.disabled = false;
                     flagsInput.disabled = false;
                     updateButtonState();
-                }, 20000);
+                }, FORM_RESET_DELAY_MS);
 
             } catch (error) {
                 showStatus(`Error: ${error.message}`, 'error');
