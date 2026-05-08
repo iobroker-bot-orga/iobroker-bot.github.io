@@ -1,0 +1,107 @@
+name: Trigger Announcement
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Repository to announce (owner/repo format, must be ioBroker adapter)'
+        required: true
+        type: string
+      template:
+        description: 'Name of the announcement template'
+        required: true
+        type: string
+      flags:
+        description: 'Optional flags to pass to the announcement workflow'
+        required: false
+        type: string
+
+  repository_dispatch:
+    types: [trigger-announcement]
+
+jobs:
+  trigger-announcement:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate repository input
+        id: validate_repository
+        shell: bash
+        run: |
+          REPO="${{ github.event.inputs.repository || github.event.client_payload.repository }}"
+          echo "Repository: $REPO"
+
+          # Validate format (owner/repo)
+          if [[ ! "$REPO" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$ ]]; then
+            echo "Error: Invalid repository format. Expected: owner/repo"
+            exit 1
+          fi
+
+          # Validate it's an ioBroker adapter repository
+          REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
+          if [[ ! "$REPO_NAME" =~ ^ioBroker\. ]]; then
+            echo "Error: Repository must be an ioBroker adapter (repository name must start with 'ioBroker.')"
+            exit 1
+          fi
+
+          echo "repository=$REPO" >> "$GITHUB_OUTPUT"
+
+      - name: Validate template input
+        id: validate_template
+        shell: bash
+        run: |
+          TEMPLATE="${{ github.event.inputs.template || github.event.client_payload.template }}"
+          echo "Template: $TEMPLATE"
+
+          if [[ -z "$TEMPLATE" ]]; then
+            echo "Error: Template is required"
+            exit 1
+          fi
+
+          echo "template=$TEMPLATE" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger announcements workflow
+        shell: bash
+        run: |
+          REPO="${{ steps.validate_repository.outputs.repository }}"
+          TEMPLATE="${{ steps.validate_template.outputs.template }}"
+          FLAGS="${{ github.event.inputs.flags || github.event.client_payload.flags || '' }}"
+
+          echo "Triggering announcement workflow"
+          echo "Repository: $REPO"
+          echo "Template: $TEMPLATE"
+          echo "Flags: $FLAGS"
+
+          JSON_PAYLOAD=$(jq -n \
+            --arg repository "$REPO" \
+            --arg template "$TEMPLATE" \
+            --arg flags "$FLAGS" \
+            '{
+              ref: "main",
+              inputs: {
+                repository: $repository,
+                template: $template,
+                flags: $flags
+              }
+            }')
+
+          echo "JSON Payload:"
+          echo "$JSON_PAYLOAD"
+
+          RESPONSE=$(curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.WORKFLOW_TRIGGER_TOKEN }}" \
+            -w "\n%{http_code}" \
+            https://api.github.com/repos/iobroker-bot-orga/announcements/actions/workflows/announceRepository.yml/dispatches \
+            -d "$JSON_PAYLOAD")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+          if [ "$HTTP_CODE" -eq 204 ] || [ "$HTTP_CODE" -eq 200 ]; then
+            echo "Workflow trigger request sent successfully (HTTP $HTTP_CODE)"
+          else
+            echo "Error: Workflow trigger request failed with HTTP $HTTP_CODE"
+            echo "$RESPONSE"
+            exit 1
+          fi
