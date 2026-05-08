@@ -255,7 +255,7 @@
         <div class="icon">📢</div>
         <h1>Announcement</h1>
         <p class="description">
-            This tool creates an announcement issue for the selected repository using a template.
+            This tool triggers announcement issue creation for the selected repository using a template.
             Select a repository, choose a template, and optionally provide additional flags.
         </p>
 
@@ -545,9 +545,13 @@
             }
         }
 
-        // Clock skew buffer in milliseconds to account for time differences between browser and GitHub servers
-        const CLOCK_SKEW_BUFFER_MS = 10000; // 10 seconds
+        // Clock skew buffer in milliseconds to account for time differences between browser and GitHub servers.
+        // 10 seconds is used to tolerate minor client/server clock drift while finding the latest workflow run.
+        const CLOCK_SKEW_BUFFER_MS = 10000;
+        // Delay before resetting the form after completion to give users time to read status/results.
         const FORM_RESET_DELAY_MS = 20000;
+        const TARGET_WORKFLOW_WAIT_TIMEOUT_MS = 180000;
+        const TARGET_WORKFLOW_MONITOR_TIMEOUT_MS = 600000;
 
         async function waitForWorkflowRun(owner, repo, workflowId, token, startTime, timeout = 120000, knownRunId = null) {
             // If we have a known run ID from the dispatch response, use it directly
@@ -829,7 +833,7 @@
                     config.ANNOUNCEMENT_TARGET_WORKFLOW_ID,
                     token,
                     startTime,
-                    180000 // 3 minutes timeout
+                    TARGET_WORKFLOW_WAIT_TIMEOUT_MS
                 );
 
                 let workflowCompleted = false;
@@ -844,7 +848,7 @@
                         config.ANNOUNCEMENT_TARGET_REPO,
                         targetWaitResult.run.id,
                         token,
-                        600000 // 10 minutes timeout for the announcement execution
+                        TARGET_WORKFLOW_MONITOR_TIMEOUT_MS
                     );
 
                     if (targetMonitorResult.success) {
