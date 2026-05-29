@@ -268,51 +268,7 @@
                 Sign in on GitHub with your username, password, and any configured 2FA.
                 Your access is remembered in this browser until you explicitly log out.
             </div>
-            <div class="auth-alternative" id="authAlternative">or use a personal access token</div>
-        </div>
-
-        <form id="loginForm" novalidate>
-            <div class="form-group">
-                <label for="tokenInput" id="tokenLabel">GitHub Personal Access Token</label>
-                <input
-                    type="password"
-                    id="tokenInput"
-                    name="token"
-                    placeholder="github_pat_... or ghp_..."
-                    autocomplete="off"
-                    spellcheck="false"
-                    required
-                >
-                <label class="show-token-toggle">
-                    <input type="checkbox" id="showToken"> Show token
-                </label>
-                <div class="help-text">
-                    Your token is only stored in your browser and is
-                    never sent to any server other than the GitHub API.
-                    <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">
-                        Create a new token ↗
-                    </a>
-                </div>
-            </div>
-
-            <button type="submit" id="loginBtn">Sign in with GitHub</button>
-
             <div class="status-message" id="statusMessage" role="alert" aria-live="polite"></div>
-        </form>
-
-        <hr class="divider">
-
-        <div class="token-instructions">
-            <strong>How to create a token:</strong>
-            <ol>
-                <li>Go to <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">GitHub → Settings → Developer settings → Personal access tokens</a></li>
-                <li>Create a <strong>fine-grained</strong> or <strong>classic</strong> token</li>
-                <li>For a fine-grained token, grant at least <strong>read-only</strong> access to the <code>iobroker-bot-orga/iobroker-bot.github.io</code> repository</li>
-                <li>For a classic token, the <strong>read:org</strong> scope is sufficient</li>
-            </ol>
-            <br>
-            Access is granted to members of the <strong>iobroker-bot-orga</strong> organization and
-            outside collaborators of the <strong>iobroker-bot.github.io</strong> repository.
         </div>
     </div>
 
@@ -322,41 +278,26 @@
         (function () {
             'use strict';
 
-            const loginForm         = document.getElementById('loginForm');
-            const tokenInput        = document.getElementById('tokenInput');
-            const showTokenCb       = document.getElementById('showToken');
-            const loginBtn          = document.getElementById('loginBtn');
             const githubLoginBtn    = document.getElementById('githubLoginBtn');
             const githubLoginSection = document.getElementById('githubLoginSection');
-            const tokenLabel        = document.getElementById('tokenLabel');
             const statusMsg         = document.getElementById('statusMessage');
             const config            = window.AUTH_CONFIG || window.REPO_CHECKER_CONFIG || null;
             const hasSessionLogin   = !!(config && config.AUTH_LOGIN_URL && config.AUTH_SESSION_URL);
 
             if (hasSessionLogin) {
                 githubLoginSection.style.display = 'block';
-                tokenLabel.textContent = 'GitHub Personal Access Token (fallback)';
-                loginBtn.textContent = 'Use Personal Access Token';
+            } else {
+                githubLoginSection.style.display = 'block';
+                githubLoginBtn.disabled = true;
+                showStatus(
+                    'GitHub login is not configured yet. Please set AUTH_LOGIN_URL, AUTH_SESSION_URL, and AUTH_LOGOUT_URL in config.js.',
+                    'error'
+                );
             }
-
-            // Toggle password visibility
-            showTokenCb.addEventListener('change', function () {
-                tokenInput.type = this.checked ? 'text' : 'password';
-            });
 
             function showStatus(message, type) {
                 statusMsg.textContent = message;
                 statusMsg.className   = 'status-message ' + type;
-            }
-
-            function setLoading(loading) {
-                if (loading) {
-                    loginBtn.disabled     = true;
-                    loginBtn.innerHTML    = '<span class="spinner"></span>Verifying…';
-                } else {
-                    loginBtn.disabled  = false;
-                    loginBtn.innerHTML = hasSessionLogin ? 'Use Personal Access Token' : 'Sign in with GitHub';
-                }
             }
 
             function setGitHubLoginLoading(loading) {
@@ -376,9 +317,8 @@
             async function restoreExistingAuth() {
                 const authMode = window.AUTH.getAuthMode();
                 const authUser = window.AUTH.getAuthUser();
-                const authToken = window.AUTH.getAuthToken();
 
-                if (authUser && (authMode === 'session' || authToken)) {
+                if (authUser && authMode === 'session') {
                     window.location.replace(window.AUTH.getRedirectTarget());
                     return;
                 }
@@ -403,7 +343,7 @@
                 githubLoginBtn.addEventListener('click', function () {
                     const loginUrl = window.AUTH.getLoginUrl(window.AUTH.getRedirectTarget());
                     if (!loginUrl) {
-                        showStatus('GitHub web login is not configured yet. Please use a personal access token.', 'error');
+                        showStatus('GitHub web login is not configured yet.', 'error');
                         return;
                     }
 
@@ -416,37 +356,7 @@
             restoreExistingAuth().catch(function () {
                 setGitHubLoginLoading(false);
                 if (hasSessionLogin) {
-                    showStatus('Unable to restore the GitHub session. You can sign in again or use a personal access token.', 'info');
-                }
-            });
-
-            loginForm.addEventListener('submit', async function (e) {
-                e.preventDefault();
-
-                const token = tokenInput.value.trim();
-                if (!token) {
-                    showStatus('Please enter your GitHub Personal Access Token.', 'error');
-                    tokenInput.focus();
-                    return;
-                }
-
-                setLoading(true);
-                showStatus('Verifying token and checking access…', 'info');
-
-                const result = await window.AUTH.verifyAccess(token);
-
-                setLoading(false);
-
-                if (result.success) {
-                    window.AUTH.setAuth(token, result.user, { mode: 'pat', persist: true });
-
-                    showStatus('Access granted. Redirecting…', 'success');
-
-                    setTimeout(function () {
-                        window.location.replace(window.AUTH.getRedirectTarget());
-                    }, 600);
-                } else {
-                    showStatus(result.error || 'Authentication failed.', 'error');
+                    showStatus('Unable to restore the GitHub session. Please sign in again.', 'info');
                 }
             });
         }());

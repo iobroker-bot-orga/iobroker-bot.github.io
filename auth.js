@@ -6,7 +6,7 @@
  * outside collaborators of the configured repository.
  *
  * Authentication state is stored in browser storage so it can survive browser
- * restarts. Optionally, a backend-managed GitHub login session can be used.
+ * restarts. Authentication requires a backend-managed GitHub login session.
  *
  * To enable or disable authentication, set REQUIRE_AUTH in config.js.
  */
@@ -110,10 +110,10 @@
 
     function setAuth(token, user, options) {
         const normalizedOptions = typeof options === 'boolean'
-            ? { persist: options, mode: 'pat' }
+            ? { persist: options, mode: 'session' }
             : (options || {});
         const persist = normalizedOptions.persist !== false;
-        const mode    = normalizedOptions.mode || 'pat';
+        const mode    = normalizedOptions.mode || 'session';
 
         if (typeof token === 'string' && token) {
             setStoredValue(TOKEN_KEY, token, persist);
@@ -200,96 +200,6 @@
         return {
             success: false,
             error: payload && payload.error ? payload.error : 'No active GitHub session found.'
-        };
-    }
-
-    // ---------------------------------------------------------------------------
-    // Access verification  (called from login.html)
-    // ---------------------------------------------------------------------------
-
-    /**
-     * Validates a GitHub PAT and checks whether the authenticated user is
-     * permitted to access the site (org member or repository collaborator).
-     *
-     * @param {string} token  GitHub Personal Access Token
-     * @returns {Promise<{success: boolean, user?: object, error?: string}>}
-     */
-    async function verifyAccess(token) {
-        const config = getConfig();
-        if (!config) {
-            return { success: false, error: 'Configuration not loaded. Please refresh the page.' };
-        }
-
-        const authOrg  = config.AUTH_ORG;
-        const authRepo = config.AUTH_REPO;
-
-        // Step 1 – validate token and retrieve user info
-        let userResponse;
-        try {
-            userResponse = await fetch('https://api.github.com/user', {
-                headers: {
-                    'Authorization': 'Bearer ' + token,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
-            });
-        } catch (e) {
-            return { success: false, error: 'Network error while contacting GitHub API. Please try again.' };
-        }
-
-        if (userResponse.status === 401) {
-            return { success: false, error: 'Invalid or expired GitHub token.' };
-        }
-        if (!userResponse.ok) {
-            return { success: false, error: 'Failed to validate token (HTTP ' + userResponse.status + ').' };
-        }
-
-        const user     = await userResponse.json();
-        const username = user.login;
-
-        // Step 2 – check organization membership
-        try {
-            const orgResponse = await fetch(
-                'https://api.github.com/orgs/' + encodeURIComponent(authOrg) +
-                '/members/' + encodeURIComponent(username),
-                {
-                    headers: {
-                        'Authorization': 'Bearer ' + token,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }
-            );
-            if (orgResponse.status === 204) {
-                return { success: true, user: user };
-            }
-        } catch (e) {
-            // fall through to collaborator check
-        }
-
-        // Step 3 – check repository collaborator access (covers outside collaborators)
-        try {
-            const collabResponse = await fetch(
-                'https://api.github.com/repos/' +
-                encodeURIComponent(authOrg) + '/' + encodeURIComponent(authRepo) +
-                '/collaborators/' + encodeURIComponent(username),
-                {
-                    headers: {
-                        'Authorization': 'Bearer ' + token,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }
-            );
-            if (collabResponse.status === 204) {
-                return { success: true, user: user };
-            }
-        } catch (e) {
-            // fall through to denial
-        }
-
-        return {
-            success: false,
-            user: user,
-            error: 'Access denied. You must be a member of the "' + authOrg +
-                   '" organization or an outside collaborator of the repository to use these tools.'
         };
     }
 
@@ -407,9 +317,11 @@
 
         const currentUser = getAuthUser();
         const currentMode = getAuthMode();
-        const currentToken = getAuthToken();
+        if (currentMode && currentMode !== 'session') {
+            clearAuth();
+        }
 
-        if (requireAuth && (!currentUser || (currentMode !== 'session' && !currentToken))) {
+        if (requireAuth && (!currentUser || currentMode !== 'session')) {
             // Not authenticated — redirect to the login page, preserving the
             // originally requested page so we can redirect back after login.
             const requestedPage = currentPage + window.location.search;
@@ -440,7 +352,6 @@
         getRedirectTarget: getRedirectTarget,
         getLoginUrl:   getLoginUrl,
         fetchSession:  fetchSession,
-        verifyAccess:  verifyAccess,
         logout:        logout,
         renderAuthBar: renderAuthBar
     };
