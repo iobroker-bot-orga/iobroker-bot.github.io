@@ -58,7 +58,16 @@ const CONFIG = {
     // GitHub organization — members of this org are granted access
     AUTH_ORG: 'iobroker-bot-orga',
     // Repository whose outside collaborators are also granted access
-    AUTH_REPO: 'iobroker-bot.github.io'
+    AUTH_REPO: 'iobroker-bot.github.io',
+    // Optional backend-assisted GitHub login endpoints. When configured, the
+    // login page can redirect users to a GitHub sign-in flow that supports
+    // username/password and 2FA. The backend is expected to expose:
+    // - AUTH_LOGIN_URL: starts the GitHub login flow and redirects back
+    // - AUTH_SESSION_URL: returns { authenticated: true, user: { login, avatar_url } }
+    // - AUTH_LOGOUT_URL: clears the backend session and redirects back
+    AUTH_LOGIN_URL: '',
+    AUTH_SESSION_URL: '',
+    AUTH_LOGOUT_URL: ''
 };
 
 // Export for use in check-repository.html, manage-prs.html, copy-issues.html, and dependabot-recreate.html

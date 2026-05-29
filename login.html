@@ -138,6 +138,37 @@
             cursor: not-allowed;
         }
 
+        .github-login-btn {
+            width: 100%;
+            padding: 13px;
+            background: #24292f;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            margin-bottom: 16px;
+        }
+
+        .github-login-btn:hover:not(:disabled) {
+            opacity: 0.95;
+            transform: translateY(-1px);
+        }
+
+        .github-login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .auth-alternative {
+            margin: 18px 0;
+            text-align: center;
+            color: #666;
+            font-size: 0.88em;
+        }
+
         .status-message {
             display: none;
             padding: 12px 16px;
@@ -231,9 +262,18 @@
             Authenticate with your GitHub account to access ioBroker Bot tools.
         </p>
 
+        <div id="githubLoginSection" style="display:none;">
+            <button type="button" id="githubLoginBtn" class="github-login-btn">Continue with GitHub</button>
+            <div class="help-text" style="margin-top:-8px;">
+                Sign in on GitHub with your username, password, and any configured 2FA.
+                Your access is remembered in this browser until you explicitly log out.
+            </div>
+            <div class="auth-alternative" id="authAlternative">or use a personal access token</div>
+        </div>
+
         <form id="loginForm" novalidate>
             <div class="form-group">
-                <label for="tokenInput">GitHub Personal Access Token</label>
+                <label for="tokenInput" id="tokenLabel">GitHub Personal Access Token</label>
                 <input
                     type="password"
                     id="tokenInput"
@@ -247,7 +287,7 @@
                     <input type="checkbox" id="showToken"> Show token
                 </label>
                 <div class="help-text">
-                    Your token is only stored in your browser's sessionStorage and is
+                    Your token is only stored in your browser and is
                     never sent to any server other than the GitHub API.
                     <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">
                         Create a new token ↗
@@ -277,50 +317,32 @@
     </div>
 
     <script src="config.js"></script>
+    <script src="auth.js"></script>
     <script>
         (function () {
             'use strict';
 
-            const TOKEN_KEY = 'iobroker_auth_token';
-            const USER_KEY  = 'iobroker_auth_user';
+            const loginForm         = document.getElementById('loginForm');
+            const tokenInput        = document.getElementById('tokenInput');
+            const showTokenCb       = document.getElementById('showToken');
+            const loginBtn          = document.getElementById('loginBtn');
+            const githubLoginBtn    = document.getElementById('githubLoginBtn');
+            const githubLoginSection = document.getElementById('githubLoginSection');
+            const tokenLabel        = document.getElementById('tokenLabel');
+            const statusMsg         = document.getElementById('statusMessage');
+            const config            = window.AUTH_CONFIG || window.REPO_CHECKER_CONFIG || null;
+            const hasSessionLogin   = !!(config && config.AUTH_LOGIN_URL && config.AUTH_SESSION_URL);
 
-            const loginForm    = document.getElementById('loginForm');
-            const tokenInput   = document.getElementById('tokenInput');
-            const showTokenCb  = document.getElementById('showToken');
-            const loginBtn     = document.getElementById('loginBtn');
-            const statusMsg    = document.getElementById('statusMessage');
-
-            // If already authenticated, redirect immediately
-            (function checkExistingSession() {
-                const token = sessionStorage.getItem(TOKEN_KEY);
-                const user  = sessionStorage.getItem(USER_KEY);
-                if (token && user) {
-                    const redirect = getRedirectTarget();
-                    window.location.replace(redirect);
-                }
-            }());
+            if (hasSessionLogin) {
+                githubLoginSection.style.display = 'block';
+                tokenLabel.textContent = 'GitHub Personal Access Token (fallback)';
+                loginBtn.textContent = 'Use Personal Access Token';
+            }
 
             // Toggle password visibility
             showTokenCb.addEventListener('change', function () {
                 tokenInput.type = this.checked ? 'text' : 'password';
             });
-
-            function getRedirectTarget() {
-                const params = new URLSearchParams(window.location.search);
-                const raw    = params.get('redirect') || 'index.html';
-                // Allow only known page filenames — strip any path prefix and query string
-                // to prevent open-redirect and XSS (e.g. via javascript: URLs).
-                const ALLOWED_PAGES = [
-                    'index.html',
-                    'check-repository.html',
-                    'manage-prs.html',
-                    'announcement.html',
-                    'copy-issues.html',
-                    'dependabot-recreate.html'
-                ];
-                const filename = raw.split('/').pop().split('?')[0];
-                return ALLOWED_PAGES.includes(filename) ? filename : 'index.html';
-            }
 
             function showStatus(message, type) {
                 statusMsg.textContent = message;
@@ -333,94 +355,70 @@
                     loginBtn.innerHTML    = '<span class="spinner"></span>Verifying…';
                 } else {
                     loginBtn.disabled  = false;
-                    loginBtn.innerHTML = 'Sign in with GitHub';
+                    loginBtn.innerHTML = hasSessionLogin ? 'Use Personal Access Token' : 'Sign in with GitHub';
                 }
             }
 
-            function getConfig() {
-                return window.AUTH_CONFIG ||
-                       window.REPO_CHECKER_CONFIG ||
-                       null;
+            function setGitHubLoginLoading(loading) {
+                if (!githubLoginBtn) {
+                    return;
+                }
+
+                if (loading) {
+                    githubLoginBtn.disabled  = true;
+                    githubLoginBtn.innerHTML = '<span class="spinner"></span>Redirecting…';
+                } else {
+                    githubLoginBtn.disabled  = false;
+                    githubLoginBtn.innerHTML = 'Continue with GitHub';
+                }
             }
 
-            async function verifyAccess(token) {
-                const config = getConfig();
-                if (!config) {
-                    return { success: false, error: 'Configuration not loaded. Please refresh the page.' };
+            async function restoreExistingAuth() {
+                const authMode = window.AUTH.getAuthMode();
+                const authUser = window.AUTH.getAuthUser();
+                const authToken = window.AUTH.getAuthToken();
+
+                if (authUser && (authMode === 'session' || authToken)) {
+                    window.location.replace(window.AUTH.getRedirectTarget());
+                    return;
                 }
 
-                const authOrg  = config.AUTH_ORG;
-                const authRepo = config.AUTH_REPO;
-
-                // Step 1 – validate token and get user info
-                let userResponse;
-                try {
-                    userResponse = await fetch('https://api.github.com/user', {
-                        headers: {
-                            'Authorization': 'Bearer ' + token,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    });
-                } catch (e) {
-                    return { success: false, error: 'Network error while contacting GitHub API. Please try again.' };
+                if (!hasSessionLogin) {
+                    return;
                 }
 
-                if (userResponse.status === 401) {
-                    return { success: false, error: 'Invalid or expired GitHub token.' };
-                }
-                if (!userResponse.ok) {
-                    return { success: false, error: 'Failed to validate token (HTTP ' + userResponse.status + ').' };
-                }
+                setGitHubLoginLoading(true);
+                const sessionResult = await window.AUTH.fetchSession();
+                setGitHubLoginLoading(false);
 
-                const user     = await userResponse.json();
-                const username = user.login;
+                if (sessionResult.success) {
+                    window.AUTH.setAuth('', sessionResult.user, { mode: 'session', persist: true });
+                    showStatus('GitHub session detected. Redirecting…', 'success');
+                    window.location.replace(window.AUTH.getRedirectTarget());
+                    return;
+                }
+            }
 
-                // Step 2 – check organization membership
-                try {
-                    const orgResponse = await fetch(
-                        'https://api.github.com/orgs/' + encodeURIComponent(authOrg) +
-                        '/members/' + encodeURIComponent(username),
-                        {
-                            headers: {
-                                'Authorization': 'Bearer ' + token,
-                                'Accept': 'application/vnd.github.v3+json'
-                            }
-                        }
-                    );
-                    if (orgResponse.status === 204) {
-                        return { success: true, user: user };
+            if (githubLoginBtn) {
+                githubLoginBtn.addEventListener('click', function () {
+                    const loginUrl = window.AUTH.getLoginUrl(window.AUTH.getRedirectTarget());
+                    if (!loginUrl) {
+                        showStatus('GitHub web login is not configured yet. Please use a personal access token.', 'error');
+                        return;
                     }
-                } catch (e) {
-                    // fall through to collaborator check
-                }
 
-                // Step 3 – check repository outside collaborator access
-                try {
-                    const collabResponse = await fetch(
-                        'https://api.github.com/repos/' +
-                        encodeURIComponent(authOrg) + '/' + encodeURIComponent(authRepo) +
-                        '/collaborators/' + encodeURIComponent(username),
-                        {
-                            headers: {
-                                'Authorization': 'Bearer ' + token,
-                                'Accept': 'application/vnd.github.v3+json'
-                            }
-                        }
-                    );
-                    if (collabResponse.status === 204) {
-                        return { success: true, user: user };
-                    }
-                } catch (e) {
-                    // fall through to denial
-                }
-
-                return {
-                    success: false,
-                    user: user,
-                    error: 'Access denied. You must be a member of the "' + authOrg +
-                           '" organization or an outside collaborator of the repository to use these tools.'
-                };
+                    setGitHubLoginLoading(true);
+                    showStatus('Redirecting to GitHub…', 'info');
+                    window.location.assign(loginUrl);
+                });
             }
+
+            restoreExistingAuth().catch(function () {
+                setGitHubLoginLoading(false);
+                if (hasSessionLogin) {
+                    showStatus('Unable to restore the GitHub session. You can sign in again or use a personal access token.', 'info');
+                }
+            });
 
             loginForm.addEventListener('submit', async function (e) {
                 e.preventDefault();
@@ -435,19 +433,17 @@
                 setLoading(true);
                 showStatus('Verifying token and checking access…', 'info');
 
-                const result = await verifyAccess(token);
+                const result = await window.AUTH.verifyAccess(token);
 
                 setLoading(false);
 
                 if (result.success) {
-                    sessionStorage.setItem(TOKEN_KEY, token);
-                    sessionStorage.setItem(USER_KEY, JSON.stringify(result.user));
+                    window.AUTH.setAuth(token, result.user, { mode: 'pat', persist: true });
 
                     showStatus('Access granted. Redirecting…', 'success');
 
-                    const redirect = getRedirectTarget();
                     setTimeout(function () {
-                        window.location.replace(redirect);
+                        window.location.replace(window.AUTH.getRedirectTarget());
                     }, 600);
                 } else {
                     showStatus(result.error || 'Authentication failed.', 'error');

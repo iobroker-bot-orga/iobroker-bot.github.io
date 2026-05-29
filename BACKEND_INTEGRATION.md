@@ -70,6 +70,25 @@ Create a GitHub App with `actions:write` permissions that:
 1. Handles OAuth authentication
 2. Triggers workflows on behalf of the authenticated user
 
+## Frontend GitHub Sign-In Integration
+
+The login page can also use a backend-managed GitHub sign-in flow so users can
+authenticate with their normal GitHub credentials (including 2FA) instead of a
+personal access token.
+
+Configure the following optional values in `config.js`:
+
+- `AUTH_LOGIN_URL`: Starts the backend login flow. The frontend appends a
+  `redirect` query parameter with the page the user should return to.
+- `AUTH_SESSION_URL`: Returns JSON in the form
+  `{ "authenticated": true, "user": { "login": "...", "avatar_url": "..." } }`
+  when the browser has a valid backend session cookie.
+- `AUTH_LOGOUT_URL`: Clears the backend session and redirects the user back to
+  the login page.
+
+When these values are configured, the site remembers the authenticated user in
+browser storage so the user does not need to sign in again on the next visit.
+
 ## Workflow Details
 
 **Proxy Workflow**: `.github/workflows/trigger-repository-check.yml` in this repository
@@ -94,4 +113,3 @@ Create a GitHub App with `actions:write` permissions that:
 ## Token Management
 
 Both tokens will expire based on their expiration period. See [SETUP.md](SETUP.md) for token renewal and management procedures.
-
