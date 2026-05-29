@@ -1,12 +1,12 @@
 /**
  * Authentication module for ioBroker Bot GitHub Pages
  *
- * Protects all pages with GitHub Personal Access Token (PAT) authentication.
+ * Protects all pages with GitHub authentication.
  * Access is granted to members of the configured GitHub organization or
  * outside collaborators of the configured repository.
  *
- * Authentication state is stored in sessionStorage and is cleared when the
- * browser tab / session ends.
+ * Authentication state is stored in browser storage so it can survive browser
+ * restarts. Optionally, a backend-managed GitHub login session can be used.
  *
  * To enable or disable authentication, set REQUIRE_AUTH in config.js.
  */
@@ -15,6 +15,7 @@
 
     const TOKEN_KEY = 'iobroker_auth_token';
     const USER_KEY  = 'iobroker_auth_user';
+    const MODE_KEY  = 'iobroker_auth_mode';
 
     // ---------------------------------------------------------------------------
     // Config helpers
@@ -31,30 +32,175 @@
     }
 
     // ---------------------------------------------------------------------------
-    // Session storage helpers
+    // Storage helpers
     // ---------------------------------------------------------------------------
 
+    function getPersistentStorage() {
+        try {
+            return window.localStorage;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getSessionStorage() {
+        try {
+            return window.sessionStorage;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getStoredValue(key) {
+        const persistentStorage = getPersistentStorage();
+        if (persistentStorage) {
+            const value = persistentStorage.getItem(key);
+            if (value !== null) {
+                return value;
+            }
+        }
+
+        const sessionStorageRef = getSessionStorage();
+        return sessionStorageRef ? sessionStorageRef.getItem(key) : null;
+    }
+
+    function setStoredValue(key, value, persist) {
+        clearStoredValue(key);
+
+        const preferredStorage = persist !== false ? getPersistentStorage() : getSessionStorage();
+        const fallbackStorage  = persist !== false ? getSessionStorage() : getPersistentStorage();
+
+        if (preferredStorage) {
+            preferredStorage.setItem(key, value);
+            return;
+        }
+        if (fallbackStorage) {
+            fallbackStorage.setItem(key, value);
+        }
+    }
+
+    function clearStoredValue(key) {
+        const persistentStorage = getPersistentStorage();
+        const sessionStorageRef = getSessionStorage();
+
+        if (persistentStorage) {
+            persistentStorage.removeItem(key);
+        }
+        if (sessionStorageRef) {
+            sessionStorageRef.removeItem(key);
+        }
+    }
+
     function getAuthToken() {
-        return sessionStorage.getItem(TOKEN_KEY);
+        return getStoredValue(TOKEN_KEY);
     }
 
     function getAuthUser() {
         try {
-            const raw = sessionStorage.getItem(USER_KEY);
+            const raw = getStoredValue(USER_KEY);
             return raw ? JSON.parse(raw) : null;
         } catch (e) {
             return null;
         }
     }
 
-    function setAuth(token, user) {
-        sessionStorage.setItem(TOKEN_KEY, token);
-        sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+    function getAuthMode() {
+        return getStoredValue(MODE_KEY);
+    }
+
+    function setAuth(token, user, options) {
+        const normalizedOptions = typeof options === 'boolean'
+            ? { persist: options, mode: 'pat' }
+            : (options || {});
+        const persist = normalizedOptions.persist !== false;
+        const mode    = normalizedOptions.mode || 'pat';
+
+        if (typeof token === 'string' && token) {
+            setStoredValue(TOKEN_KEY, token, persist);
+        } else {
+            clearStoredValue(TOKEN_KEY);
+        }
+        setStoredValue(USER_KEY, JSON.stringify(user), persist);
+        setStoredValue(MODE_KEY, mode, persist);
     }
 
     function clearAuth() {
-        sessionStorage.removeItem(TOKEN_KEY);
-        sessionStorage.removeItem(USER_KEY);
+        clearStoredValue(TOKEN_KEY);
+        clearStoredValue(USER_KEY);
+        clearStoredValue(MODE_KEY);
+    }
+
+    function getRedirectTarget() {
+        const params = new URLSearchParams(window.location.search);
+        const raw    = params.get('redirect') || 'index.html';
+        const allowedPages = [
+            'index.html',
+            'check-repository.html',
+            'manage-prs.html',
+            'announcement.html',
+            'copy-issues.html',
+            'dependabot-recreate.html'
+        ];
+        const filename = raw.split('/').pop().split('?')[0];
+        return allowedPages.includes(filename) ? filename : 'index.html';
+    }
+
+    function getLoginUrl(redirectTarget) {
+        const config = getConfig();
+        if (!config || !config.AUTH_LOGIN_URL) {
+            return null;
+        }
+
+        const loginUrl = new URL(config.AUTH_LOGIN_URL, window.location.href);
+        if (!loginUrl.searchParams.has('redirect')) {
+            loginUrl.searchParams.set(
+                'redirect',
+                new URL(redirectTarget || getRedirectTarget(), window.location.href).toString()
+            );
+        }
+        return loginUrl.toString();
+    }
+
+    async function fetchSession() {
+        const config = getConfig();
+        if (!config || !config.AUTH_SESSION_URL) {
+            return { success: false, error: 'Session authentication is not configured.' };
+        }
+
+        let response;
+        try {
+            response = await fetch(config.AUTH_SESSION_URL, {
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+        } catch (e) {
+            return { success: false, error: 'Could not reach the authentication service. Please try again.' };
+        }
+
+        if (response.status === 401) {
+            return { success: false, error: 'No active GitHub session found.' };
+        }
+        if (!response.ok) {
+            return { success: false, error: 'Failed to verify the current session (HTTP ' + response.status + ').' };
+        }
+
+        let payload;
+        try {
+            payload = await response.json();
+        } catch (e) {
+            return { success: false, error: 'Authentication service returned an invalid response.' };
+        }
+
+        if (payload && payload.authenticated === true && payload.user && payload.user.login) {
+            return { success: true, user: payload.user };
+        }
+
+        return {
+            success: false,
+            error: payload && payload.error ? payload.error : 'No active GitHub session found.'
+        };
     }
 
     // ---------------------------------------------------------------------------
@@ -152,7 +298,19 @@
     // ---------------------------------------------------------------------------
 
     function logout() {
+        const config = getConfig();
+        const logoutUrl = config && config.AUTH_LOGOUT_URL ? config.AUTH_LOGOUT_URL : null;
+        const loginUrl  = new URL('login.html', window.location.href).toString();
+
         clearAuth();
+        if (logoutUrl) {
+            const url = new URL(logoutUrl, window.location.href);
+            if (!url.searchParams.has('redirect')) {
+                url.searchParams.set('redirect', loginUrl);
+            }
+            window.location.href = url.toString();
+            return;
+        }
         window.location.href = 'login.html';
     }
 
@@ -223,32 +381,48 @@
     // Init — called automatically when the script is loaded
     // ---------------------------------------------------------------------------
 
-    function initAuth() {
+    async function initAuth() {
         const config = getConfig();
         if (!config) {
             // config.js hasn't been loaded yet — retry after DOM is ready
             return;
         }
 
-        const requireAuth = config.REQUIRE_AUTH;
-        const token       = getAuthToken();
-        const user        = getAuthUser();
+        const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+        if (currentPage === 'login.html') {
+            return;
+        }
 
-        if (requireAuth && (!token || !user)) {
+        const requireAuth = config.REQUIRE_AUTH;
+        const mode        = getAuthMode();
+
+        if (mode === 'session' && config.AUTH_SESSION_URL) {
+            const sessionResult = await fetchSession();
+            if (sessionResult.success) {
+                setAuth('', sessionResult.user, { mode: 'session', persist: true });
+            } else {
+                clearAuth();
+            }
+        }
+
+        const currentUser = getAuthUser();
+        const currentMode = getAuthMode();
+        const currentToken = getAuthToken();
+
+        if (requireAuth && (!currentUser || (currentMode !== 'session' && !currentToken))) {
             // Not authenticated — redirect to the login page, preserving the
             // originally requested page so we can redirect back after login.
-            const currentPage = (window.location.pathname.split('/').pop() || 'index.html') +
-                                 window.location.search;
-            window.location.replace('login.html?redirect=' + encodeURIComponent(currentPage));
+            const requestedPage = currentPage + window.location.search;
+            window.location.replace('login.html?redirect=' + encodeURIComponent(requestedPage));
             return;
         }
 
         // Render the persistent auth bar so the user can see who they are and log out
-        if (user) {
+        if (currentUser) {
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function () { renderAuthBar(user); });
+                document.addEventListener('DOMContentLoaded', function () { renderAuthBar(currentUser); });
             } else {
-                renderAuthBar(user);
+                renderAuthBar(currentUser);
             }
         }
     }
@@ -260,8 +434,12 @@
     window.AUTH = {
         getAuthToken:  getAuthToken,
         getAuthUser:   getAuthUser,
+        getAuthMode:   getAuthMode,
         setAuth:       setAuth,
         clearAuth:     clearAuth,
+        getRedirectTarget: getRedirectTarget,
+        getLoginUrl:   getLoginUrl,
+        fetchSession:  fetchSession,
         verifyAccess:  verifyAccess,
         logout:        logout,
         renderAuthBar: renderAuthBar
