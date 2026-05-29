@@ -72,11 +72,11 @@ Create a GitHub App with `actions:write` permissions that:
 
 ## Frontend GitHub Sign-In Integration
 
-The login page can also use a backend-managed GitHub sign-in flow so users can
-authenticate with their normal GitHub credentials (including 2FA) instead of a
-personal access token.
+Authentication now uses only backend-managed GitHub sign-in, so users
+authenticate with their normal GitHub credentials (including 2FA) and no
+personal access token is required.
 
-Configure the following optional values in `config.js`:
+Configure the following values in `config.js`:
 
 - `AUTH_LOGIN_URL`: Starts the backend login flow. The frontend appends a
   `redirect` query parameter with the page the user should return to.
@@ -86,8 +86,17 @@ Configure the following optional values in `config.js`:
 - `AUTH_LOGOUT_URL`: Clears the backend session and redirects the user back to
   the login page.
 
-When these values are configured, the site remembers the authenticated user in
-browser storage so the user does not need to sign in again on the next visit.
+Example:
+
+```js
+AUTH_LOGIN_URL: 'https://auth.example.com/github/login',
+AUTH_SESSION_URL: 'https://auth.example.com/github/session',
+AUTH_LOGOUT_URL: 'https://auth.example.com/github/logout'
+```
+
+> `AUTH_*` must point to your own auth service. GitHub OAuth cannot be completed
+> securely from a static frontend alone because exchanging the OAuth `code` for
+> a user session/token requires server-side handling.
 
 ## Workflow Details
 
