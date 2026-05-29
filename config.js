@@ -49,7 +49,16 @@ const CONFIG = {
     ANNOUNCEMENT_TARGET_WORKFLOW_ID: 'announceRepository.yml',
     ANNOUNCEMENT_TEMPLATES_REPO: 'iobroker-bot-orga/announcements',
     ANNOUNCEMENT_TEMPLATES_BRANCH: 'main',
-    ANNOUNCEMENT_TEMPLATES_PATH: 'templates'
+    ANNOUNCEMENT_TEMPLATES_PATH: 'templates',
+
+    // Authentication configuration
+    // Set REQUIRE_AUTH to true to require GitHub authentication to access any page.
+    // Set to false to disable the login requirement entirely.
+    REQUIRE_AUTH: true,
+    // GitHub organization — members of this org are granted access
+    AUTH_ORG: 'iobroker-bot-orga',
+    // Repository whose outside collaborators are also granted access
+    AUTH_REPO: 'iobroker-bot.github.io'
 };
 
 // Export for use in check-repository.html, manage-prs.html, copy-issues.html, and dependabot-recreate.html
@@ -59,4 +68,5 @@ if (typeof window !== 'undefined') {
     window.COPY_ISSUES_CONFIG = CONFIG;
     window.DEPENDABOT_RECREATE_CONFIG = CONFIG;
     window.ANNOUNCEMENT_CONFIG = CONFIG;
+    window.AUTH_CONFIG = CONFIG;
 }
