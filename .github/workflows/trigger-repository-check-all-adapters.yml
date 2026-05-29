@@ -1,0 +1,58 @@
+name: Trigger Repository Check - all Adapters
+
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: 'Filter repositories by owner/name pattern (optional)'
+        required: false
+        type: string
+      flags:
+        description: 'Optional flags to pass to the workflow'
+        required: false
+        type: string
+      from:
+        description: 'Resume processing from this adapter name (optional)'
+        required: false
+        type: string
+      delay:
+        description: 'Delay in seconds between processing each repository'
+        required: false
+        type: string
+        default: '30'
+
+jobs:
+  trigger-check-latest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Trigger check-latest workflow
+        shell: bash
+        run: |
+          FILTER="${{ github.event.inputs.filter || '' }}"
+          FLAGS="${{ github.event.inputs.flags || '' }}"
+          FROM="${{ github.event.inputs.from || '' }}"
+          DELAY="${{ github.event.inputs.delay || '30' }}"
+
+          JSON_PAYLOAD=$(jq -n \
+            --arg filter "$FILTER" \
+            --arg flags "$FLAGS" \
+            --arg from "$FROM" \
+            --arg delay "$DELAY" \
+            '{
+              ref: "main",
+              inputs: {
+                filter: $filter,
+                flags: $flags,
+                from: $from,
+                delay: $delay
+              }
+            }')
+
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.WORKFLOW_TRIGGER_TOKEN }}" \
+            https://api.github.com/repos/iobroker-bot-orga/check-tasks/actions/workflows/checkLatestRepositories.yml/dispatches \
+            -d "$JSON_PAYLOAD"
+
