@@ -304,7 +304,13 @@
         }
 
         const requireAuth = config.REQUIRE_AUTH;
-        const mode        = getAuthMode();
+
+        // Authentication is disabled — nothing to do on non-login pages
+        if (!requireAuth) {
+            return;
+        }
+
+        const mode = getAuthMode();
 
         if (mode === 'session' && config.AUTH_SESSION_URL) {
             const sessionResult = await fetchSession();

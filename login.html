@@ -282,7 +282,14 @@
             const githubLoginSection = document.getElementById('githubLoginSection');
             const statusMsg         = document.getElementById('statusMessage');
             const config            = window.AUTH_CONFIG || window.REPO_CHECKER_CONFIG || null;
+            const requireAuth       = !!(config && config.REQUIRE_AUTH);
             const hasSessionLogin   = !!(config && config.AUTH_LOGIN_URL && config.AUTH_SESSION_URL);
+
+            // Authentication is disabled — redirect immediately to the target page
+            if (!requireAuth) {
+                window.location.replace(window.AUTH.getRedirectTarget());
+                return;
+            }
 
             if (hasSessionLogin) {
                 githubLoginSection.style.display = 'block';
