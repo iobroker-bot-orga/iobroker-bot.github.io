@@ -322,6 +322,7 @@
         </form>
 
         <a href="index.html" class="back-link">← Back to Tools</a>
+        <a href="announcement.html" class="back-link">↻ Restart Tool</a>
     </div>
 
     <script src="config.js"></script>
@@ -374,6 +375,24 @@
             const div = document.createElement('div');
             div.textContent = String(text);
             return div.innerHTML;
+        }
+
+        // Safely create a link element
+        function createSafeLink(url, text, className) {
+            // Validate URL is from GitHub
+            if (!url || !(url.startsWith('https://github.com/') || url.startsWith('https://api.github.com/'))) {
+                return escapeHtml(text);
+            }
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.textContent = String(text);
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            if (className) {
+                link.className = className;
+            }
+            return link.outerHTML;
         }
 
         function validateRepository(value) {
@@ -448,7 +467,19 @@
             const step = document.getElementById(stepId);
             step.className = `progress-step ${status}`;
             const statusElement = step.querySelector('.progress-step-status');
-            statusElement.textContent = statusText;
+            // Check if statusText contains safe HTML from createSafeLink
+            // Only allow innerHTML if it's a string and contains an anchor tag with a validated GitHub URL
+            if (typeof statusText === 'string' && /<a\s/i.test(statusText)) {
+                // Additional validation: ensure it's from our createSafeLink function
+                // by checking for both the anchor tag and the GitHub-specific attributes
+                if (statusText.includes('target="_blank"') && statusText.includes('rel="noopener noreferrer"')) {
+                    statusElement.innerHTML = statusText;
+                } else {
+                    statusElement.textContent = statusText;
+                }
+            } else {
+                statusElement.textContent = statusText;
+            }
         }
 
         function showProgress() {
@@ -487,9 +518,9 @@
 
                 const items = await response.json();
                 
-                // Filter directories that don't start with underscore
+                // Filter directories that don't start with underscore and ignore archive directories
                 const templates = items
-                    .filter(item => item.type === 'dir' && !item.name.startsWith('_'))
+                    .filter(item => item.type === 'dir' && !item.name.startsWith('_') && item.name !== '__archive__')
                     .map(item => item.name)
                     .sort();
 
@@ -793,7 +824,9 @@
                 }
 
                 const intermediateRun = waitResult.run;
-                updateProgressStep('step4', 'running', `Monitoring workflow run ${intermediateRun.html_url}...`);
+                const intermediateLinkText = `${config.OWNER}/${config.REPO}#${intermediateRun.id}`;
+                const intermediateRunLink = createSafeLink(intermediateRun.html_url, intermediateLinkText, 'progress-step-link');
+                updateProgressStep('step4', 'running', `Monitoring workflow run ${intermediateRunLink}...`);
 
                 const monitorResult = await monitorWorkflowRun(
                     config.OWNER,
@@ -803,7 +836,7 @@
                 );
 
                 if (!monitorResult.success) {
-                    updateProgressStep('step4', 'error', monitorResult.error);
+                    updateProgressStep('step4', 'error', `${monitorResult.error} (${intermediateRunLink})`);
                     showStatus('Workflow monitoring timed out. Check the Actions tab manually.', 'error');
                     repositoryInput.disabled = false;
                     templateSelect.disabled = false;
@@ -813,9 +846,9 @@
                 }
 
                 if (monitorResult.conclusion === 'success') {
-                    updateProgressStep('step4', 'success', 'Intermediate workflow completed successfully');
+                    updateProgressStep('step4', 'success', `Intermediate workflow completed successfully (${intermediateRunLink})`);
                 } else {
-                    updateProgressStep('step4', 'error', `Workflow failed with conclusion: ${monitorResult.conclusion}`);
+                    updateProgressStep('step4', 'error', `Workflow failed with conclusion: ${monitorResult.conclusion} (${intermediateRunLink})`);
                     showStatus(`Intermediate workflow failed: ${monitorResult.conclusion}`, 'error');
                     repositoryInput.disabled = false;
                     templateSelect.disabled = false;
@@ -841,7 +874,9 @@
                 if (!targetWaitResult.success) {
                     updateProgressStep('step5', 'running', 'Workflow may still be running...');
                 } else {
-                    updateProgressStep('step5', 'running', `Monitoring announcement workflow run ${targetWaitResult.run.html_url}...`);
+                    const targetLinkText = `${config.ANNOUNCEMENT_TARGET_OWNER}/${config.ANNOUNCEMENT_TARGET_REPO}#${targetWaitResult.run.id}`;
+                    const targetRunLink = createSafeLink(targetWaitResult.run.html_url, targetLinkText, 'progress-step-link');
+                    updateProgressStep('step5', 'running', `Monitoring announcement workflow run ${targetRunLink}...`);
 
                     const targetMonitorResult = await monitorWorkflowRun(
                         config.ANNOUNCEMENT_TARGET_OWNER,
@@ -854,12 +889,12 @@
                     if (targetMonitorResult.success) {
                         workflowCompleted = true;
                         if (targetMonitorResult.conclusion === 'success') {
-                            updateProgressStep('step5', 'success', 'Announcement workflow completed successfully');
+                            updateProgressStep('step5', 'success', `Announcement workflow completed successfully (${targetRunLink})`);
                         } else {
-                            updateProgressStep('step5', 'error', `Announcement workflow failed: ${targetMonitorResult.conclusion}`);
+                            updateProgressStep('step5', 'error', `Announcement workflow failed: ${targetMonitorResult.conclusion} (${targetRunLink})`);
                         }
                     } else {
-                        updateProgressStep('step5', 'running', 'Announcement workflow is taking longer than expected...');
+                        updateProgressStep('step5', 'running', `Announcement workflow is taking longer than expected (${targetRunLink})...`);
                     }
                 }
 

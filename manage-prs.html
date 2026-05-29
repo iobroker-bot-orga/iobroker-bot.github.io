@@ -335,6 +335,7 @@
         </form>
 
         <a href="index.html" class="back-link">← Back to Tools</a>
+        <a href="manage-prs.html" class="back-link">↻ Restart Tool</a>
     </div>
 
     <script src="config.js"></script>
@@ -545,9 +546,9 @@
 
                 const items = await response.json();
                 
-                // Filter directories that don't start with underscore
+                // Filter directories that don't start with underscore and ignore archive directories
                 const templates = items
-                    .filter(item => item.type === 'dir' && !item.name.startsWith('_'))
+                    .filter(item => item.type === 'dir' && !item.name.startsWith('_') && item.name !== '__archive__')
                     .map(item => item.name)
                     .sort();
 
@@ -875,8 +876,8 @@
 
                 const intermediateRun = waitResult.run;
                 const linkText = `${config.OWNER}/${config.REPO}#${intermediateRun.id}`;
-                const safeLink = createSafeLink(intermediateRun.html_url, linkText, 'progress-step-link');
-                updateProgressStep('step4', 'running', `Monitoring workflow run ${safeLink}...`);
+                const intermediateRunLink = createSafeLink(intermediateRun.html_url, linkText, 'progress-step-link');
+                updateProgressStep('step4', 'running', `Monitoring workflow run ${intermediateRunLink}...`);
 
                 const monitorResult = await monitorWorkflowRun(
                     config.OWNER,
@@ -886,7 +887,7 @@
                 );
 
                 if (!monitorResult.success) {
-                    updateProgressStep('step4', 'error', monitorResult.error);
+                    updateProgressStep('step4', 'error', `${monitorResult.error} (${intermediateRunLink})`);
                     showStatus('Workflow monitoring timed out. Check the Actions tab manually.', 'error');
                     repositoryInput.disabled = false;
                     templateSelect.disabled = false;
@@ -897,9 +898,9 @@
                 }
 
                 if (monitorResult.conclusion === 'success') {
-                    updateProgressStep('step4', 'success', 'Intermediate workflow completed successfully');
+                    updateProgressStep('step4', 'success', `Intermediate workflow completed successfully (${intermediateRunLink})`);
                 } else {
-                    updateProgressStep('step4', 'error', `Workflow failed with conclusion: ${monitorResult.conclusion}`);
+                    updateProgressStep('step4', 'error', `Workflow failed with conclusion: ${monitorResult.conclusion} (${intermediateRunLink})`);
                     showStatus(`Intermediate workflow failed: ${monitorResult.conclusion}`, 'error');
                     repositoryInput.disabled = false;
                     templateSelect.disabled = false;
@@ -927,8 +928,8 @@
                     updateProgressStep('step5', 'running', 'Workflow may still be running. Checking for PR...');
                 } else {
                     const linkText = `${config.MANAGE_PRS_TARGET_OWNER}/${config.MANAGE_PRS_TARGET_REPO}#${targetWaitResult.run.id}`;
-                    const safeLink = createSafeLink(targetWaitResult.run.html_url, linkText, 'progress-step-link');
-                    updateProgressStep('step5', 'running', `Monitoring PR creation workflow run ${safeLink}...`);
+                    const targetRunLink = createSafeLink(targetWaitResult.run.html_url, linkText, 'progress-step-link');
+                    updateProgressStep('step5', 'running', `Monitoring PR creation workflow run ${targetRunLink}...`);
 
                     const targetMonitorResult = await monitorWorkflowRun(
                         config.MANAGE_PRS_TARGET_OWNER,
@@ -941,12 +942,12 @@
                     if (targetMonitorResult.success) {
                         workflowCompleted = true;
                         if (targetMonitorResult.conclusion === 'success') {
-                            updateProgressStep('step5', 'success', 'PR creation completed successfully');
+                            updateProgressStep('step5', 'success', `PR creation completed successfully (${targetRunLink})`);
                         } else {
-                            updateProgressStep('step5', 'error', `PR creation failed: ${targetMonitorResult.conclusion}`);
+                            updateProgressStep('step5', 'error', `PR creation failed: ${targetMonitorResult.conclusion} (${targetRunLink})`);
                         }
                     } else {
-                        updateProgressStep('step5', 'running', 'PR creation is taking longer than expected. Looking for PR...');
+                        updateProgressStep('step5', 'running', `PR creation is taking longer than expected. Looking for PR... (${targetRunLink})`);
                     }
                 }
 

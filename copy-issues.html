@@ -348,6 +348,7 @@
         </form>
 
         <a href="index.html" class="back-link">← Back to Tools</a>
+        <a href="copy-issues.html" class="back-link">↻ Restart Tool</a>
     </div>
 
     <script src="config.js"></script>
@@ -824,8 +825,8 @@
 
                 const intermediateRun = waitResult.run;
                 const linkText = `${config.OWNER}/${config.REPO}#${intermediateRun.id}`;
-                const safeLink = createSafeLink(intermediateRun.html_url, linkText, 'progress-step-link');
-                updateProgressStep('step3', 'running', `Monitoring intermediate workflow run ${safeLink}...`);
+                const intermediateRunLink = createSafeLink(intermediateRun.html_url, linkText, 'progress-step-link');
+                updateProgressStep('step3', 'running', `Monitoring intermediate workflow run ${intermediateRunLink}...`);
 
                 const monitorResult = await monitorWorkflowRun(
                     config.OWNER,
@@ -835,7 +836,7 @@
                 );
 
                 if (!monitorResult.success) {
-                    updateProgressStep('step3', 'error', monitorResult.error);
+                    updateProgressStep('step3', 'error', `${monitorResult.error} (${intermediateRunLink})`);
                     showStatus('Workflow monitoring timed out. Check the Actions tab manually.', 'error');
                     targetInput.disabled = false;
                     sourceInput.disabled = false;
@@ -846,9 +847,9 @@
                 }
 
                 if (monitorResult.conclusion === 'success') {
-                    updateProgressStep('step3', 'success', 'Intermediate workflow completed successfully');
+                    updateProgressStep('step3', 'success', `Intermediate workflow completed successfully (${intermediateRunLink})`);
                 } else {
-                    updateProgressStep('step3', 'error', `Workflow failed with conclusion: ${monitorResult.conclusion}`);
+                    updateProgressStep('step3', 'error', `Workflow failed with conclusion: ${monitorResult.conclusion} (${intermediateRunLink})`);
                     showStatus(`Intermediate workflow failed: ${monitorResult.conclusion}`, 'error');
                     targetInput.disabled = false;
                     sourceInput.disabled = false;
@@ -876,8 +877,8 @@
                     updateProgressStep('step4', 'running', 'Workflow may still be running...');
                 } else {
                     const linkText = `${config.TOOLS_OWNER}/${config.TOOLS_REPO}#${targetWaitResult.run.id}`;
-                    const safeLink = createSafeLink(targetWaitResult.run.html_url, linkText, 'progress-step-link');
-                    updateProgressStep('step4', 'running', `Monitoring copy workflow run ${safeLink}...`);
+                    const targetRunLink = createSafeLink(targetWaitResult.run.html_url, linkText, 'progress-step-link');
+                    updateProgressStep('step4', 'running', `Monitoring copy workflow run ${targetRunLink}...`);
 
                     const targetMonitorResult = await monitorWorkflowRun(
                         config.TOOLS_OWNER,
@@ -890,12 +891,12 @@
                     if (targetMonitorResult.success) {
                         workflowCompleted = true;
                         if (targetMonitorResult.conclusion === 'success') {
-                            updateProgressStep('step4', 'success', 'Copy issues completed successfully');
+                            updateProgressStep('step4', 'success', `Copy issues completed successfully (${targetRunLink})`);
                         } else {
-                            updateProgressStep('step4', 'error', `Copy failed: ${targetMonitorResult.conclusion}`);
+                            updateProgressStep('step4', 'error', `Copy failed: ${targetMonitorResult.conclusion} (${targetRunLink})`);
                         }
                     } else {
-                        updateProgressStep('step4', 'running', 'Copy is taking longer than expected...');
+                        updateProgressStep('step4', 'running', `Copy is taking longer than expected... (${targetRunLink})`);
                     }
                 }
 
