@@ -54,7 +54,7 @@ const CONFIG = {
     // Authentication configuration
     // Set REQUIRE_AUTH to true to require GitHub authentication to access any page.
     // Set to false to disable the login requirement entirely.
-    REQUIRE_AUTH: true,
+    REQUIRE_AUTH: false,
     // GitHub organization — members of this org are granted access
     AUTH_ORG: 'iobroker-bot-orga',
     // Repository whose outside collaborators are also granted access
