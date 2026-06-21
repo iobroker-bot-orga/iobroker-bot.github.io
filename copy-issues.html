@@ -555,7 +555,8 @@
                 } else if (response.status === 404) {
                     return { exists: false, error: `Repository not found (${url})` };
                 } else {
-                    return { exists: false, error: `HTTP ${response.status}: ${response.statusText} (${url})` };
+                    const errorMsg = await window.AUTH.getGitHubErrorMessage(response);
+                    return { exists: false, error: `${errorMsg} (${url})` };
                 }
             } catch (error) {
                 return { exists: false, error: error.message };
@@ -772,8 +773,8 @@
                     } else if (response.status === 404) {
                         showStatus('Workflow not found.', 'error');
                     } else {
-                        const errorData = await response.json().catch(() => ({}));
-                        showStatus(`Failed to trigger workflow: ${errorData.message || response.statusText}`, 'error');
+                        const errorMsg = await window.AUTH.getGitHubErrorMessage(response);
+                        showStatus(`Failed to trigger workflow: ${errorMsg}`, 'error');
                     }
                     
                     targetInput.disabled = false;

@@ -204,6 +204,60 @@
     }
 
     // ---------------------------------------------------------------------------
+    // GitHub error helpers
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Extracts a human-readable error message from a failed GitHub API response.
+     * When the response indicates a rate limit (HTTP 403 with x-ratelimit-remaining: 0
+     * or a rate-limit message in the body), the reset time is included in the message.
+     *
+     * @param {Response} response - A Fetch API Response object that was not ok.
+     * @returns {Promise<string>} A descriptive error message.
+     */
+    async function getGitHubErrorMessage(response) {
+        // Try to extract the error message from the response body
+        let bodyMessage = '';
+        try {
+            const body = await response.clone().json();
+            if (body && body.message) {
+                bodyMessage = body.message;
+            }
+        } catch (e) {
+            // Ignore – response may not be JSON
+        }
+
+        // Check GitHub rate-limit response headers
+        const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
+        const rateLimitReset     = response.headers.get('x-ratelimit-reset');
+        const retryAfter         = response.headers.get('retry-after');
+
+        const isRateLimit = response.status === 403 && (
+            rateLimitRemaining === '0' ||
+            (bodyMessage && bodyMessage.toLowerCase().includes('rate limit'))
+        );
+
+        if (isRateLimit) {
+            let resetInfo = '';
+            if (rateLimitReset) {
+                const resetDate = new Date(parseInt(rateLimitReset, 10) * 1000);
+                resetInfo = ' Rate limit resets at ' + resetDate.toLocaleTimeString() + ' (' + resetDate.toLocaleDateString() + ').';
+            } else if (retryAfter) {
+                const seconds = parseInt(retryAfter, 10);
+                resetInfo = ' Retry after ' + seconds + ' second' + (seconds !== 1 ? 's' : '') + '.';
+            }
+            const details = bodyMessage ? ' (' + bodyMessage + ')' : '';
+            return 'Rate limit exceeded.' + resetInfo + details;
+        }
+
+        if (bodyMessage) {
+            return 'HTTP ' + response.status + ': ' + bodyMessage;
+        }
+
+        return 'HTTP ' + response.status + ': ' + response.statusText;
+    }
+
+    // ---------------------------------------------------------------------------
     // Logout
     // ---------------------------------------------------------------------------
 
@@ -359,7 +413,8 @@
         getLoginUrl:   getLoginUrl,
         fetchSession:  fetchSession,
         logout:        logout,
-        renderAuthBar: renderAuthBar
+        renderAuthBar: renderAuthBar,
+        getGitHubErrorMessage: getGitHubErrorMessage
     };
 
     // Run immediately — config.js must be loaded before auth.js in every page
