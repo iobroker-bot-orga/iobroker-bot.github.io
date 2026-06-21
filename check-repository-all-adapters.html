@@ -195,7 +195,10 @@
                     cache: 'no-store',
                     body: JSON.stringify({ ref: 'main', inputs })
                 });
-                if (response.status !== 204 && response.status !== 200) throw new Error(`Failed to trigger workflow (HTTP ${response.status})`);
+                if (response.status !== 204 && response.status !== 200) {
+                    const errorMsg = await window.AUTH.getGitHubErrorMessage(response);
+                    throw new Error(`Failed to trigger workflow: ${errorMsg}`);
+                }
 
                 let workflowRunId = null;
                 if (response.status === 200) {
